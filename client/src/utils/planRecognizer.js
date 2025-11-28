@@ -269,19 +269,33 @@ export async function recognizePlan(file) {
     
     if (metadata.rooms && metadata.rooms.length > 0) {
       // Используем комнаты из OCR
+      // Жилые комнаты: только спальни и гостиные >= 8 м² (НЕ включаем кухню и санузлы)
       const ocrLivingRooms = metadata.rooms.filter(r => {
         // Исключаем лестницы
         if (r.number === '1-2' || (r.number && r.number.includes('-'))) return false;
         // Исключаем очень маленькие помещения (< 1.5 м²) - кладовые
         if (r.area < 1.5) return false;
-        // Исключаем санузлы (< 3 м²)
-        if (r.area < 3 && (r.number === '17' || r.number === '18')) return false;
-        // Жилые комнаты >= 5 м²
-        return r.area >= 5;
+        // Исключаем санузлы (номера 17, 18)
+        if (r.number === '17' || r.number === '18') return false;
+        // Исключаем кухню (комната 20) - она не считается жилой комнатой
+        if (r.number === '20') return false;
+        // Исключаем все маленькие помещения (< 3 м²)
+        if (r.area < 3) return false;
+        // Жилые комнаты: только >= 8 м² (спальни, гостиные)
+        return r.area >= 8;
       });
       livingRoomsCount = ocrLivingRooms.length;
       console.log(`Найдено жилых комнат из OCR: ${livingRoomsCount} (всего OCR комнат: ${metadata.rooms.length})`);
       console.log('OCR жилые комнаты:', ocrLivingRooms.map(r => ({ number: r.number, area: r.area })));
+      console.log('Исключённые комнаты:', metadata.rooms.filter(r => {
+        if (r.number === '1-2' || (r.number && r.number.includes('-'))) return true;
+        if (r.area < 1.5) return true;
+        if (r.number === '17' || r.number === '18') return true;
+        if (r.number === '20') return true;
+        if (r.area < 3) return true;
+        if (r.area < 8) return true;
+        return false;
+      }).map(r => `${r.number} (${r.area} м²)`));
     } else {
       // Если нет OCR, используем геометрические комнаты
       const livingRooms = rooms.filter(r => {
@@ -327,16 +341,24 @@ export async function recognizePlan(file) {
         .filter(r => {
           // Исключаем лестницы
           if (r.number === '1-2' || (r.number && r.number.includes('-'))) return false;
-          // Исключаем очень маленькие помещения (< 1.5 м²) - кладовые
+          // Исключаем очень маленькие помещения (< 1.5 м²) - кладовые (комната 23)
           if (r.area < 1.5) return false;
-          // Исключаем санузлы (обычно < 3 м²)
-          if (r.area < 3 && (r.number === '17' || r.number === '18')) return false;
+          // Исключаем санузлы (комнаты 17, 18 или площадь < 3 м²)
+          if (r.number === '17' || r.number === '18') return false;
+          if (r.area < 3) return false; // Все маленькие помещения
           return true;
         })
         .reduce((sum, room) => sum + room.area, 0);
       
       area = totalArea.toFixed(1);
       console.log(`Площадь из OCR комнат: ${area} м²`);
+      console.log('Учтённые комнаты:', metadata.rooms.filter(r => {
+        if (r.number === '1-2' || (r.number && r.number.includes('-'))) return false;
+        if (r.area < 1.5) return false;
+        if (r.number === '17' || r.number === '18') return false;
+        if (r.area < 3) return false;
+        return true;
+      }).map(r => `${r.number} (${r.area} м²)`));
     } else if (rooms.length > 0) {
       // Если нет OCR, вычисляем из геометрических комнат
       const totalArea = rooms
@@ -357,13 +379,27 @@ export async function recognizePlan(file) {
       console.log(`Вычисленная площадь из геометрии: ${area} м²`);
     }
     
-    // Если есть общая площадь из OCR метаданных, используем её (она может быть точнее)
+    // Если есть общая площадь из OCR метаданных, проверяем её
+    // Но приоритет у суммы комнат (она точнее, так как исключает санузлы и кладовые)
     if (metadata.area && metadata.area !== '0' && metadata.area !== '0.0') {
       const ocrTotalArea = parseFloat(metadata.area);
-      // Если общая площадь из OCR разумная (30-200 м²), используем её
-      if (ocrTotalArea >= 30 && ocrTotalArea <= 200) {
-        area = metadata.area;
-        console.log(`Используется общая площадь из OCR метаданных: ${area} м²`);
+      const calculatedArea = parseFloat(area);
+      
+      // Если общая площадь из OCR близка к вычисленной (разница < 10%), используем вычисленную
+      // (она точнее, так как исключает нежилые помещения)
+      if (ocrTotalArea >= 30 && ocrTotalArea <= 200 && calculatedArea > 0) {
+        const diff = Math.abs(ocrTotalArea - calculatedArea);
+        const diffPercent = (diff / Math.max(ocrTotalArea, calculatedArea)) * 100;
+        
+        if (diffPercent < 15) {
+          // Используем вычисленную площадь (она точнее)
+          console.log(`OCR общая площадь: ${metadata.area} м², вычисленная: ${area} м² (разница ${diffPercent.toFixed(1)}%)`);
+          console.log(`Используется вычисленная площадь (исключает санузлы и кладовые): ${area} м²`);
+        } else {
+          // Если разница большая, возможно OCR общая площадь точнее
+          area = metadata.area;
+          console.log(`Используется общая площадь из OCR метаданных: ${area} м²`);
+        }
       }
     }
     
