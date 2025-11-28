@@ -552,6 +552,17 @@ const handleFileChange = async (event) => {
   uploadedFileContent.value = await fileToBase64(file);
 };
 
+const downloadJson = () => {
+  if (!generatedJson.value) return;
+  const blob = new Blob([generatedJson.value], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `homeplanner3d-payload-${Date.now()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 const handleSubmit = async () => {
   submitStatus.value = '';
   handleGenerate();
@@ -561,6 +572,7 @@ const handleSubmit = async () => {
     const response = await fakeSendToApi();
     if (response.ok) {
       submitStatus.value = 'Данные приняты. Мы готовим визуализацию и проверяем нормы.';
+      downloadJson();
     } else {
       submitStatus.value = 'Не удалось отправить данные. Попробуйте ещё раз.';
     }
