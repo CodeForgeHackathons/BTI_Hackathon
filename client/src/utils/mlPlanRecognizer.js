@@ -45,106 +45,268 @@ async function imageToTensor(image, targetSize = [512, 512]) {
 }
 
 /**
- * Детекция стен с помощью ML модели
+ * Детекция стен с помощью DeepLabV3+ модели
  */
 async function detectWallsML(image) {
   const models = getModels();
   
   if (!models.wallDetection) {
-    console.warn('ML модель детекции стен недоступна, используем fallback');
-    return null;
+    throw new Error('ML модель детекции стен недоступна');
   }
   
   try {
     const tf = await getTensorFlow();
-    const { tensor, originalWidth, originalHeight } = await imageToTensor(image, [512, 512]);
+    // DeepLab работает лучше с размером 513x513
+    const { tensor, originalWidth, originalHeight } = await imageToTensor(image, [513, 513]);
     
-    // Предсказание модели
+    // Предсказание DeepLabV3+ (возвращает маску сегментации)
     const prediction = models.wallDetection.predict(tensor);
     
-    // Обработка результатов (зависит от формата вывода модели)
-    // Предполагаем, что модель возвращает маску или координаты стен
-    const wallsData = await prediction.data();
+    // DeepLab возвращает [batch, height, width, num_classes]
+    // Нужно получить argmax для каждого пикселя
+    const segmentation = prediction.argMax(-1); // [batch, height, width]
+    const segmentationData = await segmentation.data();
+    
     prediction.dispose();
+    segmentation.dispose();
     tensor.dispose();
     
-    // Преобразуем выход модели в формат стен
-    // Это зависит от архитектуры модели - здесь примерная структура
-    const walls = parseWallsFromMLOutput(wallsData, originalWidth, originalHeight);
+    // Преобразуем маску сегментации в стены
+    // DeepLab сегментирует объекты, нужно найти границы сегментов (стены)
+    const walls = parseWallsFromDeepLabOutput(segmentationData, 513, 513, originalWidth, originalHeight);
     
     return walls;
   } catch (error) {
     console.error('Ошибка ML детекции стен:', error);
-    return null;
+    throw error;
   }
 }
 
 /**
- * Парсит выход ML модели в формат стен
- * Адаптируйте под формат вашей модели
+ * Парсит выход DeepLabV3+ в формат стен
+ * Находит границы сегментов и преобразует в линии стен
  */
-function parseWallsFromMLOutput(modelOutput, width, height) {
+function parseWallsFromDeepLabOutput(segmentationData, segWidth, segHeight, originalWidth, originalHeight) {
   const walls = [];
+  const scaleX = originalWidth / segWidth;
+  const scaleY = originalHeight / segHeight;
   
-  // Пример: если модель возвращает маску или координаты
-  // Здесь нужно адаптировать под конкретную архитектуру модели
-  // Например, YOLO возвращает bounding boxes, segmentation модели - маски
+  // Преобразуем маску в 2D массив
+  const mask = [];
+  for (let y = 0; y < segHeight; y++) {
+    mask[y] = [];
+    for (let x = 0; x < segWidth; x++) {
+      const idx = y * segWidth + x;
+      mask[y][x] = segmentationData[idx];
+    }
+  }
   
-  // Для примера: если модель возвращает маску (H x W x 2), где
-  // канал 0 = горизонтальные стены, канал 1 = вертикальные стены
-  const outputShape = [height, width, 2]; // Примерная форма
+  // Находим границы между разными сегментами (это стены)
+  // Проходим по маске и ищем переходы между классами
   
-  // Преобразуем маску в линии стен
-  // Это упрощенный пример - реальная реализация зависит от модели
+  // Горизонтальные стены (переходы по Y)
+  for (let y = 1; y < segHeight; y++) {
+    let wallStart = null;
+    for (let x = 0; x < segWidth; x++) {
+      const current = mask[y][x];
+      const above = mask[y - 1][x];
+      
+      // Если класс изменился - это граница (стена)
+      if (current !== above) {
+        if (wallStart === null) {
+          wallStart = x;
+        }
+      } else {
+        if (wallStart !== null) {
+          // Завершаем стену
+          const length = x - wallStart;
+          if (length > 10) { // Минимальная длина стены
+            walls.push({
+              start: { x: wallStart * scaleX, y: y * scaleY },
+              end: { x: x * scaleX, y: y * scaleY },
+              type: 'horizontal',
+              loadBearing: length > 100, // Длинные стены - несущие
+              thickness: length > 100 ? 0.4 : 0.12
+            });
+          }
+          wallStart = null;
+        }
+      }
+    }
+    // Завершаем стену в конце строки
+    if (wallStart !== null) {
+      const length = segWidth - wallStart;
+      if (length > 10) {
+        walls.push({
+          start: { x: wallStart * scaleX, y: y * scaleY },
+          end: { x: segWidth * scaleX, y: y * scaleY },
+          type: 'horizontal',
+          loadBearing: length > 100,
+          thickness: length > 100 ? 0.4 : 0.12
+        });
+      }
+    }
+  }
+  
+  // Вертикальные стены (переходы по X)
+  for (let x = 1; x < segWidth; x++) {
+    let wallStart = null;
+    for (let y = 0; y < segHeight; y++) {
+      const current = mask[y][x];
+      const left = mask[y][x - 1];
+      
+      if (current !== left) {
+        if (wallStart === null) {
+          wallStart = y;
+        }
+      } else {
+        if (wallStart !== null) {
+          const length = y - wallStart;
+          if (length > 10) {
+            walls.push({
+              start: { x: x * scaleX, y: wallStart * scaleY },
+              end: { x: x * scaleX, y: y * scaleY },
+              type: 'vertical',
+              loadBearing: length > 100,
+              thickness: length > 100 ? 0.4 : 0.12
+            });
+          }
+          wallStart = null;
+        }
+      }
+    }
+    if (wallStart !== null) {
+      const length = segHeight - wallStart;
+      if (length > 10) {
+        walls.push({
+          start: { x: x * scaleX, y: wallStart * scaleY },
+          end: { x: x * scaleX, y: segHeight * scaleY },
+          type: 'vertical',
+          loadBearing: length > 100,
+          thickness: length > 100 ? 0.4 : 0.12
+        });
+      }
+    }
+  }
   
   return walls;
 }
 
 /**
- * Сегментация комнат с помощью ML модели
+ * Сегментация комнат с помощью DeepLabV3+ модели
  */
 async function segmentRoomsML(image) {
   const models = getModels();
   
   if (!models.roomSegmentation) {
-    console.warn('ML модель сегментации комнат недоступна, используем fallback');
-    return null;
+    throw new Error('ML модель сегментации комнат недоступна');
   }
   
   try {
     const tf = await getTensorFlow();
-    const { tensor, originalWidth, originalHeight } = await imageToTensor(image, [512, 512]);
+    // DeepLab работает лучше с размером 513x513
+    const { tensor, originalWidth, originalHeight } = await imageToTensor(image, [513, 513]);
     
-    // Предсказание модели
+    // Предсказание DeepLabV3+
     const prediction = models.roomSegmentation.predict(tensor);
-    const segmentationData = await prediction.data();
+    const segmentation = prediction.argMax(-1);
+    const segmentationData = await segmentation.data();
+    
     prediction.dispose();
+    segmentation.dispose();
     tensor.dispose();
     
     // Преобразуем маску сегментации в комнаты
-    const rooms = parseRoomsFromSegmentation(segmentationData, originalWidth, originalHeight);
+    const rooms = parseRoomsFromDeepLabSegmentation(segmentationData, 513, 513, originalWidth, originalHeight);
     
     return rooms;
   } catch (error) {
     console.error('Ошибка ML сегментации комнат:', error);
-    return null;
+    throw error;
   }
 }
 
 /**
- * Парсит маску сегментации в формат комнат
+ * Парсит маску сегментации DeepLabV3+ в формат комнат
+ * Находит отдельные сегменты (комнаты) и их границы
  */
-function parseRoomsFromSegmentation(segmentationData, width, height) {
+function parseRoomsFromDeepLabSegmentation(segmentationData, segWidth, segHeight, originalWidth, originalHeight) {
   const rooms = [];
+  const scaleX = originalWidth / segWidth;
+  const scaleY = originalHeight / segHeight;
   
-  // Преобразуем маску сегментации в полигоны комнат
-  // Используем алгоритм контуров для извлечения границ
+  // Преобразуем маску в 2D массив
+  const mask = [];
+  for (let y = 0; y < segHeight; y++) {
+    mask[y] = [];
+    for (let x = 0; x < segWidth; x++) {
+      const idx = y * segWidth + x;
+      mask[y][x] = segmentationData[idx];
+    }
+  }
   
-  // Примерная логика:
-  // 1. Найти уникальные метки в маске
-  // 2. Для каждой метки найти контур
-  // 3. Преобразовать контур в полигон вершин
-  // 4. Вычислить площадь
+  // Находим уникальные сегменты (комнаты)
+  const segments = new Map(); // segmentId -> { pixels: [], bounds: {} }
+  
+  for (let y = 0; y < segHeight; y++) {
+    for (let x = 0; x < segWidth; x++) {
+      const segmentId = mask[y][x];
+      
+      if (!segments.has(segmentId)) {
+        segments.set(segmentId, {
+          pixels: [],
+          minX: x,
+          maxX: x,
+          minY: y,
+          maxY: y
+        });
+      }
+      
+      const segment = segments.get(segmentId);
+      segment.pixels.push({ x, y });
+      segment.minX = Math.min(segment.minX, x);
+      segment.maxX = Math.max(segment.maxX, x);
+      segment.minY = Math.min(segment.minY, y);
+      segment.maxY = Math.max(segment.maxY, y);
+    }
+  }
+  
+  // Преобразуем сегменты в комнаты
+  let roomIndex = 1;
+  for (const [segmentId, segment] of segments.entries()) {
+    // Пропускаем фоновые сегменты (обычно класс 0)
+    if (segmentId === 0) continue;
+    
+    const width = (segment.maxX - segment.minX) * scaleX;
+    const height = (segment.maxY - segment.minY) * scaleY;
+    const area = width * height; // Приблизительная площадь в пикселях
+    
+    // Фильтруем слишком маленькие сегменты (шум)
+    if (area < 1000) continue; // Минимум ~1000 пикселей
+    
+    // Создаем прямоугольную комнату из границ сегмента
+    // (можно улучшить, найдя точный контур)
+    const vertices = [
+      { x: segment.minX * scaleX, y: segment.minY * scaleY },
+      { x: segment.maxX * scaleX, y: segment.minY * scaleY },
+      { x: segment.maxX * scaleX, y: segment.maxY * scaleY },
+      { x: segment.minX * scaleX, y: segment.maxY * scaleY }
+    ];
+    
+    // Оцениваем площадь в м² (нужен масштаб, пока используем приближение)
+    const areaM2 = area / 10000; // Примерное преобразование (зависит от масштаба)
+    
+    rooms.push({
+      name: `Комната ${roomIndex}`,
+      vertices,
+      area: areaM2,
+      isLivingRoom: areaM2 >= 8, // Комнаты >= 8 м² считаем жилыми
+      width: width,
+      height: height
+    });
+    
+    roomIndex++;
+  }
   
   return rooms;
 }
@@ -247,7 +409,10 @@ export async function recognizePlanML(file) {
     
     // Проверяем, что модели загружены
     if (!areMLModelsLoaded()) {
-      throw new Error('ML модели не загружены. Убедитесь, что модели доступны и загружены.');
+      return {
+        success: false,
+        error: 'ML модели не загружены. TensorFlow Hub недоступен из-за CORS. Разместите модели локально в public/models/ или используйте прокси-сервер.'
+      };
     }
     
     console.log('Используем нейросети (ML) для распознавания плана...');

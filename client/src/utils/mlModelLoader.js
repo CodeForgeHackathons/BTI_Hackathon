@@ -27,30 +27,51 @@ async function initTensorFlow() {
 
 /**
  * Загружает модель для детекции стен
- * Модель может быть локальной или загружаться с сервера
+ * Использует DeepLabV3+ для сегментации стен (можно использовать ту же модель)
  */
 async function loadWallDetectionModel(modelPath = null) {
   try {
     const tfModule = await initTensorFlow();
     
-    // Если путь не указан, используем дефолтный (можно настроить)
-    const defaultPath = modelPath || '/models/wall-detection/model.json';
+    // Если путь указан, используем его
+    if (modelPath) {
+      try {
+        wallDetectionModel = await tfModule.loadLayersModel(modelPath);
+        console.log('Модель детекции стен загружена с указанного пути');
+        return wallDetectionModel;
+      } catch (error) {
+        console.warn('Не удалось загрузить с указанного пути');
+      }
+    }
     
+    // Пробуем загрузить с Google Storage (поддерживает CORS)
     try {
-      // Пытаемся загрузить модель с указанного пути
-      wallDetectionModel = await tfModule.loadLayersModel(defaultPath);
-      console.log('Модель детекции стен загружена');
+      const googleStorageUrl = 'https://storage.googleapis.com/tfjs-models/tfjs/deeplab_pascal/model.json';
+      console.log('Загрузка DeepLabV3+ для стен с Google Storage...');
+      wallDetectionModel = await tfModule.loadLayersModel(googleStorageUrl);
+      console.log('✅ DeepLabV3+ для стен загружена успешно');
       return wallDetectionModel;
-    } catch (loadError) {
-      console.warn('Не удалось загрузить модель с локального пути, используем API:', loadError);
+    } catch (googleError) {
+      console.warn('Не удалось загрузить с Google Storage:', googleError);
       
-      // Fallback: загрузка через API (если есть сервер с моделями)
-      // В реальном проекте здесь будет вызов API вашего сервера
-      // const response = await fetch('https://your-api.com/models/wall-detection');
-      // wallDetectionModel = await tfModule.loadLayersModel(response);
-      
-      // Для прототипа: возвращаем null, будет использован fallback алгоритм
-      return null;
+      // Пробуем локальную модель
+      try {
+        const wallPath = '/models/wall-detection/model.json';
+        wallDetectionModel = await tfModule.loadLayersModel(wallPath);
+        console.log('✅ Модель детекции стен загружена локально');
+        return wallDetectionModel;
+      } catch (wallError) {
+        // Если нет в wall-detection, пробуем deeplab (можно использовать одну модель для обеих задач)
+        try {
+          const deeplabPath = '/models/deeplab/model.json';
+          wallDetectionModel = await tfModule.loadLayersModel(deeplabPath);
+          console.log('✅ Модель для стен загружена из deeplab');
+          return wallDetectionModel;
+        } catch (localError) {
+          console.warn('Локальная модель недоступна. Разместите model.json в public/models/wall-detection/ или public/models/deeplab/');
+          return null;
+        }
+      }
     }
   } catch (error) {
     console.error('Ошибка загрузки модели детекции стен:', error);
@@ -60,19 +81,52 @@ async function loadWallDetectionModel(modelPath = null) {
 
 /**
  * Загружает модель для сегментации комнат
+ * Использует DeepLabV3+ с TensorFlow Hub (бесплатно, без обучения)
  */
 async function loadRoomSegmentationModel(modelPath = null) {
   try {
     const tfModule = await initTensorFlow();
-    const defaultPath = modelPath || '/models/room-segmentation/model.json';
     
+    // Если путь указан, используем его
+    if (modelPath) {
+      try {
+        roomSegmentationModel = await tfModule.loadLayersModel(modelPath);
+        console.log('Модель сегментации комнат загружена с указанного пути');
+        return roomSegmentationModel;
+      } catch (error) {
+        console.warn('Не удалось загрузить с указанного пути, пробуем TensorFlow Hub');
+      }
+    }
+    
+    // Пробуем загрузить готовую модель с Google Storage (поддерживает CORS)
     try {
-      roomSegmentationModel = await tfModule.loadLayersModel(defaultPath);
-      console.log('Модель сегментации комнат загружена');
+      const googleStorageUrl = 'https://storage.googleapis.com/tfjs-models/tfjs/deeplab_pascal/model.json';
+      console.log('Загрузка DeepLabV3+ с Google Storage...');
+      roomSegmentationModel = await tfModule.loadLayersModel(googleStorageUrl);
+      console.log('✅ DeepLabV3+ модель загружена успешно с Google Storage');
       return roomSegmentationModel;
-    } catch (loadError) {
-      console.warn('Не удалось загрузить модель сегментации, используем fallback');
-      return null;
+    } catch (googleError) {
+      console.warn('Не удалось загрузить с Google Storage:', googleError);
+      
+      // Fallback на локальную модель
+      try {
+        // Пробуем deeplab (если скопировали туда)
+        const deeplabPath = '/models/deeplab/model.json';
+        roomSegmentationModel = await tfModule.loadLayersModel(deeplabPath);
+        console.log('✅ Модель сегментации загружена из deeplab');
+        return roomSegmentationModel;
+      } catch (deeplabError) {
+        // Пробуем room-segmentation
+        try {
+          const localPath = '/models/room-segmentation/model.json';
+          roomSegmentationModel = await tfModule.loadLayersModel(localPath);
+          console.log('✅ Модель сегментации загружена локально');
+          return roomSegmentationModel;
+        } catch (localError) {
+          console.warn('Локальная модель недоступна. Разместите model.json в public/models/deeplab/');
+          return null;
+        }
+      }
     }
   } catch (error) {
     console.error('Ошибка загрузки модели сегментации:', error);

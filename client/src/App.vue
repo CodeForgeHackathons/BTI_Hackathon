@@ -417,7 +417,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue';
+import { reactive, ref } from 'vue';
 
 // Ленивая загрузка распознавателя (чтобы не блокировать загрузку страницы)
 let planRecognizer = null;
@@ -432,35 +432,6 @@ async function getPlanRecognizer() {
   }
   return planRecognizer;
 }
-
-// Предзагрузка ML моделей в фоне (не блокирует UI)
-let mlModelsLoading = false;
-async function preloadMLModels() {
-  if (mlModelsLoading) return;
-  mlModelsLoading = true;
-  
-  try {
-    // Загружаем ML модели в фоне
-    const mlLoader = await import('./utils/mlModelLoader.js');
-    await mlLoader.loadAllModels({
-      // Можно указать пути к моделям, если они размещены на сервере
-      // wallModelPath: '/models/wall-detection/model.json',
-      // roomModelPath: '/models/room-segmentation/model.json',
-      // metadataModelPath: '/models/metadata-extraction/model.json'
-    });
-    console.log('ML модели предзагружены и готовы к использованию');
-  } catch (error) {
-    console.warn('Не удалось предзагрузить ML модели, будет использован алгоритмический fallback:', error);
-  } finally {
-    mlModelsLoading = false;
-  }
-}
-
-// Начинаем предзагрузку моделей после монтирования компонента
-onMounted(() => {
-  // Предзагружаем ML модели в фоне (не блокирует UI)
-  preloadMLModels();
-});
 
 const planSources = [
   'PDF / техпаспорт',
