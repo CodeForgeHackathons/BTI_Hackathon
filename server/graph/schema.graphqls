@@ -1,7 +1,16 @@
-type User {
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+type User{
   id: ID!
   email: String!
-  name: String!
+  login: String!
+  username: String!
+}
+input BTI_agent{
+  id: ID!
+  prompt: String!
 }
 
 type Query {
@@ -10,10 +19,17 @@ type Query {
 
 input RegisterInput {
   email: String!
-  name: String!
+  login: String!
+  username: String!
   password: String!
 }
 
 type Mutation {
   register(input: RegisterInput!): User!
+  askBTIagent(input: BTI_agent!): String
 }
+
+
+
+
+

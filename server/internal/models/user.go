@@ -5,10 +5,10 @@ import (
 )
 
 type User struct {
-	ID       int64 `gorm:"primaryKey"`
-	Login    string
-	Password string
+	ID       uint   `gorm:"primaryKey"`
+	Login    string `gorm:"not null"`
+	Password string `gorm:"not null"`
 	Username string
-	Email    *string
-	Birthday *time.Time
+	Email    string
+	Birthday time.Time
 }
