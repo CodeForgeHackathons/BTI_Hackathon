@@ -1,6 +1,21 @@
 <template>
   <div class="page">
     <header class="hero">
+      <div class="hero__topbar">
+        <span class="hero__logo">HomePlanner3D</span>
+        <div class="hero__top-actions">
+          <span v-if="currentUser" class="hero__user">
+            {{ currentUser.username || currentUser.login }}
+          </span>
+          <button
+            type="button"
+            class="btn btn--ghost btn--small hero__login-btn"
+            @click="isAuthModalOpen = true"
+          >
+            {{ currentUser ? 'Аккаунт' : 'Войти' }}
+          </button>
+        </div>
+      </div>
       <div class="hero__content">
         <p class="hero__badge">HomePlanner3D · цифровой помощник перепланировки</p>
         <h1>
@@ -413,13 +428,118 @@
         <a href="#">Политика</a>
       </div>
     </footer>
+
+    <!-- Модальное окно входа / регистрации -->
+    <div v-if="isAuthModalOpen" class="modal-backdrop" @click.self="isAuthModalOpen = false">
+      <div class="modal">
+        <div class="modal__header">
+          <h3 v-if="!currentUser">
+            {{ authMode === 'login' ? 'Вход в аккаунт' : 'Регистрация' }}
+          </h3>
+          <h3 v-else>Профиль</h3>
+          <button type="button" class="modal__close" @click="isAuthModalOpen = false">×</button>
+        </div>
+
+        <div v-if="!currentUser" class="modal__body">
+          <div class="account__tabs">
+            <button
+              type="button"
+              :class="['account__tab', authMode === 'login' && 'account__tab--active']"
+              @click="authMode = 'login'"
+            >
+              Войти
+            </button>
+            <button
+              type="button"
+              :class="['account__tab', authMode === 'register' && 'account__tab--active']"
+              @click="authMode = 'register'"
+            >
+              Регистрация
+            </button>
+          </div>
+
+          <form class="account__form" @submit.prevent="handleAuthSubmit">
+            <label>
+              Логин
+              <input
+                v-model="authForm.login"
+                type="text"
+                autocomplete="username"
+                required
+              />
+            </label>
+            <label>
+              Пароль
+              <input
+                v-model="authForm.password"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+            </label>
+            <label v-if="authMode === 'register'">
+              Имя пользователя
+              <input
+                v-model="authForm.username"
+                type="text"
+                placeholder="Как к вам обращаться"
+              />
+            </label>
+            <label v-if="authMode === 'register'">
+              Email
+              <input
+                v-model="authForm.email"
+                type="email"
+                placeholder="name@example.com"
+              />
+            </label>
+            <label v-if="authMode === 'register'">
+              Дата рождения
+              <input
+                v-model="authForm.birthday"
+                type="date"
+              />
+            </label>
+
+            <div class="account__actions">
+              <button
+                type="submit"
+                class="btn btn--primary btn--small"
+                :disabled="authLoading"
+              >
+                {{ authLoading
+                  ? (authMode === 'login' ? 'Входим…' : 'Регистрируем…')
+                  : (authMode === 'login' ? 'Войти' : 'Зарегистрироваться') }}
+              </button>
+              <p v-if="authError" class="account__error">
+                {{ authError }}
+              </p>
+            </div>
+          </form>
+        </div>
+
+        <div v-else class="modal__body account__profile">
+          <div class="account__card">
+            <p><strong>Логин:</strong> {{ currentUser.login }}</p>
+            <p v-if="currentUser.username"><strong>Имя:</strong> {{ currentUser.username }}</p>
+            <p v-if="currentUser.email"><strong>Email:</strong> {{ currentUser.email }}</p>
+            <p v-if="currentUser.birthday"><strong>Дата рождения:</strong> {{ formatBirthday(currentUser.birthday) }}</p>
+          </div>
+          <div class="account__actions">
+            <button type="button" class="btn btn--ghost btn--small" @click="logout">
+              Выйти
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
 import { graphqlRequest, CREATE_PLANNING_PROJECT_MUTATION } from './utils/graphqlClient.js';
-
+ 
 // Ленивая загрузка распознавателя (чтобы не блокировать загрузку страницы)
 let planRecognizer = null;
 async function getPlanRecognizer() {
@@ -461,6 +581,9 @@ async function preloadMLModels() {
 onMounted(() => {
   // Предзагружаем ML модели в фоне (не блокирует UI)
   preloadMLModels();
+
+  // Пробуем восстановить сессию пользователя по токену
+  fetchCurrentUser();
 });
 
 const planSources = [
@@ -511,6 +634,21 @@ const fileError = ref('');
 const recognitionStatus = ref('idle'); // 'idle' | 'processing' | 'success' | 'error'
 const manualEditMode = ref(false);
 const recognitionStats = ref(null); // Статистика распознавания
+
+// Состояние личного кабинета
+const currentUser = ref(null);
+const authMode = ref('login'); // 'login' | 'register'
+const authLoading = ref(false);
+const authError = ref('');
+const isAuthModalOpen = ref(false);
+
+const authForm = reactive({
+  login: '',
+  password: '',
+  username: '',
+  email: '',
+  birthday: '',
+});
 
 const parseRooms = () =>
   formData.roomsText
@@ -600,6 +738,132 @@ const handleGenerate = () => {
   };
 
   generatedJson.value = JSON.stringify(payload, null, 2);
+};
+
+// GraphQL-операции для Users (локально, чтобы не тащить их в общий клиент)
+const LOGIN_MUTATION = `
+  mutation Login($input: LoginInput!) {
+    login(input: $input) {
+      token
+      user {
+        id
+        login
+        username
+        email
+        birthday
+      }
+    }
+  }
+`;
+
+const REGISTER_MUTATION = `
+  mutation Register($input: RegisterInput!) {
+    register(input: $input) {
+      token
+      user {
+        id
+        login
+        username
+        email
+        birthday
+      }
+    }
+  }
+`;
+
+const ME_QUERY = `
+  query Me {
+    me {
+      id
+      login
+      username
+      email
+      birthday
+    }
+  }
+`;
+
+const saveAuthToken = (token) => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage && token) {
+      window.localStorage.setItem('authToken', token);
+    }
+  } catch {
+    // игнорируем ошибки доступа к localStorage
+  }
+};
+
+const clearAuthToken = () => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('authToken');
+    }
+  } catch {
+    // ignore
+  }
+};
+
+const fetchCurrentUser = async () => {
+  try {
+    const data = await graphqlRequest(ME_QUERY);
+    if (data && data.me) {
+      currentUser.value = data.me;
+    }
+  } catch (error) {
+    console.warn('Не удалось получить текущего пользователя:', error);
+    currentUser.value = null;
+  }
+};
+
+const handleAuthSubmit = async () => {
+  authError.value = '';
+  authLoading.value = true;
+
+  const input = {
+    login: authForm.login,
+    password: authForm.password,
+  };
+
+  if (authMode.value === 'register') {
+    input.username = authForm.username || null;
+    input.email = authForm.email || null;
+    input.birthday = authForm.birthday || null;
+  }
+
+  try {
+    const mutation = authMode.value === 'login' ? LOGIN_MUTATION : REGISTER_MUTATION;
+    const result = await graphqlRequest(mutation, { input });
+
+    const payloadRoot = authMode.value === 'login' ? result?.login : result?.register;
+    if (!payloadRoot || !payloadRoot.token || !payloadRoot.user) {
+      authError.value = 'Не удалось выполнить операцию. Проверьте данные и попробуйте ещё раз.';
+      return;
+    }
+
+    saveAuthToken(payloadRoot.token);
+    currentUser.value = payloadRoot.user;
+  } catch (error) {
+    console.error('Ошибка аутентификации:', error);
+    authError.value = error.message || 'Ошибка входа. Попробуйте ещё раз.';
+  } finally {
+    authLoading.value = false;
+  }
+};
+
+const logout = () => {
+  clearAuthToken();
+  currentUser.value = null;
+};
+
+const formatBirthday = (value) => {
+  if (!value) return '';
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('ru-RU');
+  } catch {
+    return value;
+  }
 };
 
 /**
@@ -1077,6 +1341,41 @@ section {
   overflow: hidden;
 }
 
+.hero__topbar {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #c6cad4;
+  pointer-events: none;
+}
+
+.hero__logo {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hero__top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.hero__user {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.hero__login-btn {
+  padding-inline: 14px;
+}
+
 .hero__content {
   max-width: 520px;
 }
@@ -1107,6 +1406,126 @@ section {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.account__tabs {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  margin-bottom: 16px;
+}
+
+.account__tab {
+  border: none;
+  background: transparent;
+  color: #c6cad4;
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.account__tab--active {
+  background: #2f5dff;
+  color: #fff;
+}
+
+.account__form {
+  display: grid;
+  gap: 12px;
+}
+
+.account__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #dfe2ea;
+}
+
+.account__form input {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  padding: 10px;
+  font-family: inherit;
+}
+
+.account__actions {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.account__error {
+  color: #ff9b9b;
+  font-size: 13px;
+}
+
+.account__profile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account__card {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #151826;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.account__card p {
+  margin-bottom: 6px;
+}
+
+.account__hint {
+  font-size: 13px;
+  color: #9aa5c1;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: #111423;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  padding: 20px 22px 22px;
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal__close {
+  border: none;
+  background: transparent;
+  color: #9aa5c1;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal__body {
+  margin-top: 4px;
 }
 
 .intake {

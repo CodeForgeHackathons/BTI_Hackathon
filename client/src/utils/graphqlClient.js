@@ -6,7 +6,7 @@
  * - Для изменения создайте файл .env с переменной VITE_GRAPHQL_ENDPOINT
  * - Пример: VITE_GRAPHQL_ENDPOINT=http://localhost:8080/graphql
  */
-
+ 
 // URL GraphQL endpoint (можно переопределить через переменные окружения)
 const GRAPHQL_ENDPOINT = import.meta.env.VITE_GRAPHQL_ENDPOINT || '/graphql';
 
@@ -21,14 +21,30 @@ export async function graphqlRequest(query, variables = {}) {
   try {
     // Формируем запрос как строку с подставленными переменными
     const queryString = buildQueryString(query, variables);
+
+    // Пытаемся достать токен авторизации для ЛК (если он сохранён)
+    let token = null;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        token = window.localStorage.getItem('authToken');
+      }
+    } catch {
+      token = null;
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     
     // Отправляем запрос как строку (не JSON объект)
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers,
       body: JSON.stringify(queryString), // Отправляем строку запроса
     });
 
