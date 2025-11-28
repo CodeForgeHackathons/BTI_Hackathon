@@ -48,12 +48,39 @@
             type="file"
             accept=".pdf,.dwg,.dxf,.ifc,.jpg,.jpeg,.png"
             @change="handleFileChange"
+            :disabled="recognitionStatus === 'processing'"
           />
-          <small v-if="uploadedFileMeta">
+          <small v-if="uploadedFileMeta && recognitionStatus !== 'processing'">
             {{ uploadedFileMeta.name }} · {{ uploadedFileMeta.size }} · {{ uploadedFileMeta.type }}
+          </small>
+          <small v-else-if="recognitionStatus === 'processing'" class="intake__recognition">
+            🔍 Распознаём план... Пожалуйста, подождите.
           </small>
           <small v-else>Загрузите файл, чтобы мы распознали план автоматически.</small>
           <small v-if="fileError" class="intake__error">{{ fileError }}</small>
+          <small v-if="recognitionStatus === 'success'" class="intake__success">
+            ✅ План распознан успешно! Геометрия загружена автоматически.
+            <button type="button" @click="enableManualEdit" class="intake__edit-btn">
+              Редактировать вручную
+            </button>
+          </small>
+          <small v-if="recognitionStatus === 'error'" class="intake__error">
+            ⚠️ Автоматическое распознавание не удалось. Пожалуйста, введите данные вручную.
+          </small>
+        </label>
+        <label>
+          Адрес квартиры / Регион
+          <input
+            v-model="formData.address"
+            type="text"
+            placeholder="Москва, ул. Примерная, д. 1"
+          />
+          <small>Нужно для проверки региональных норм и подключения экспертов БТИ.</small>
+        </label>
+        <label>
+          Площадь квартиры, м²
+          <input v-model="formData.area" type="number" step="0.1" min="10" max="500" />
+          <small>Общая площадь квартиры из техпаспорта.</small>
         </label>
         <label>
           Откуда документ?
@@ -76,31 +103,36 @@
         <label>
           Высота потолков, м
           <input v-model="formData.ceilingHeight" type="number" step="0.1" />
-          <small>Помогает правильно построить 3D-сцену.</small>
+          <small>Помогает правильно построить 3D-сцену. Если неизвестно, оставьте пустым.</small>
         </label>
         <label>
           Перепад пола, см
           <input v-model="formData.floorDelta" type="number" step="0.5" />
           <small>Если уровни одинаковые, оставьте 0.</small>
         </label>
-        <label class="intake__wide">
-          Контуры комнат
-          <textarea
-            v-model="formData.roomsText"
-            rows="4"
-            placeholder="Гостиная:0,0;5.2,0;5.2,4.1;0,4.1"
-          ></textarea>
-          <small>Укажите название комнаты и точки по плану. Можно скопировать из распознанного файла.</small>
-        </label>
-        <label class="intake__wide">
-          Стены и их тип
-          <textarea
-            v-model="formData.wallsText"
-            rows="4"
-            placeholder="0,0 -> 5.2,0; несущая; 0.2"
-          ></textarea>
-          <small>По одной стене в строке. Важны несущие и толщина.</small>
-        </label>
+        <div v-if="recognitionStatus === 'error' || recognitionStatus === 'success' || manualEditMode" class="intake__geometry-section">
+          <h3 class="intake__section-title">
+            {{ recognitionStatus === 'success' && !manualEditMode ? 'Распознанная геометрия плана (можно редактировать)' : 'Геометрия плана (заполняется вручную)' }}
+          </h3>
+          <label class="intake__wide">
+            Контуры комнат
+            <textarea
+              v-model="formData.roomsText"
+              rows="4"
+              placeholder="Гостиная:0,0;5.2,0;5.2,4.1;0,4.1"
+            ></textarea>
+            <small>Укажите название комнаты и координаты точек. Формат: Комната:x1,y1;x2,y2;x3,y3...</small>
+          </label>
+          <label class="intake__wide">
+            Стены и их тип
+            <textarea
+              v-model="formData.wallsText"
+              rows="4"
+              placeholder="0,0 -> 5.2,0; несущая; 0.2"
+            ></textarea>
+            <small>По одной стене в строке. Формат: x1,y1 -> x2,y2; тип; толщина</small>
+          </label>
+        </div>
         <label class="intake__wide">
           Ограничения
           <textarea
@@ -411,6 +443,8 @@ const familyProfiles = [
 ];
 
 const formData = reactive({
+  address: '',
+  area: '',
   planType: planSources[0],
   layoutType: layoutTypes[1],
   familyProfile: familyProfiles[0],
@@ -418,8 +452,8 @@ const formData = reactive({
   prompt: 'Объединить кухню и гостиную, добавить гардероб у входа',
   ceilingHeight: '2.7',
   floorDelta: '0',
-  roomsText: 'Гостиная:0,0;5.2,0;5.2,4.1;0,4.1',
-  wallsText: '0,0 -> 5.2,0; несущая; 0.2',
+  roomsText: '',
+  wallsText: '',
   constraintsText: 'нельзя переносить кухню над жилой\nсохранить вентшахту',
   regionRules: 'СНиП 31-02; ЖК РФ ст.25',
 });
@@ -430,6 +464,8 @@ const submitStatus = ref('');
 const uploadedFileMeta = ref(null);
 const uploadedFileContent = ref('');
 const fileError = ref('');
+const recognitionStatus = ref('idle'); // 'idle' | 'processing' | 'success' | 'error'
+const manualEditMode = ref(false);
 
 const parseRooms = () =>
   formData.roomsText
@@ -488,6 +524,8 @@ const parseConstraints = () =>
 const handleGenerate = () => {
   const payload = {
     plan: {
+      address: formData.address,
+      area: Number(formData.area) || null,
       source: formData.planType,
       layoutType: formData.layoutType,
       familyProfile: formData.familyProfile,
@@ -495,6 +533,7 @@ const handleGenerate = () => {
       prompt: formData.prompt,
       ceilingHeight: Number(formData.ceilingHeight) || null,
       floorDelta: Number(formData.floorDelta) || 0,
+      recognitionStatus: recognitionStatus.value,
       file: uploadedFileMeta.value
         ? {
             name: uploadedFileMeta.value.name,
@@ -505,9 +544,9 @@ const handleGenerate = () => {
         : null,
     },
     geometry: {
-      rooms: parseRooms(),
+      rooms: formData.roomsText ? parseRooms() : [],
     },
-    walls: parseWalls(),
+    walls: formData.wallsText ? parseWalls() : [],
     constraints: {
       forbiddenMoves: parseConstraints(),
       regionRules: formData.regionRules,
@@ -531,12 +570,42 @@ const fileToBase64 = (file) =>
     reader.readAsDataURL(file);
   });
 
+const recognizePlan = async (file) => {
+  // Симуляция API распознавания плана
+  // В реальном приложении здесь будет запрос к бэкенду с компьютерным зрением
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Случайно выбираем успех или ошибку для демонстрации
+      const success = Math.random() > 0.3; // 70% успех
+      
+      if (success) {
+        // Симулируем успешное распознавание
+        resolve({
+          success: true,
+          rooms: 'Гостиная:0,0;5.2,0;5.2,4.1;0,4.1\nКухня:5.2,0;8.0,0;8.0,3.5;5.2,3.5\nСпальня:0,4.1;5.2,4.1;5.2,7.5;0,7.5',
+          walls: '0,0 -> 5.2,0; ненесущая; 0.12\n5.2,0 -> 8.0,0; несущая; 0.4\n0,0 -> 0,7.5; несущая; 0.4',
+          area: '62.5',
+          ceilingHeight: '2.7'
+        });
+      } else {
+        resolve({ success: false });
+      }
+    }, 2000); // Симуляция обработки 2 секунды
+  });
+};
+
+const enableManualEdit = () => {
+  manualEditMode.value = true;
+};
+
 const handleFileChange = async (event) => {
   fileError.value = '';
   const file = event.target.files?.[0];
   if (!file) {
     uploadedFileMeta.value = null;
     uploadedFileContent.value = '';
+    recognitionStatus.value = 'idle';
+    manualEditMode.value = false;
     return;
   }
   const allowedTypes = [
@@ -553,14 +622,41 @@ const handleFileChange = async (event) => {
     fileError.value = 'Недопустимый формат. Загрузите PDF, DWG, DXF, IFC, JPG или PNG.';
     uploadedFileMeta.value = null;
     uploadedFileContent.value = '';
+    recognitionStatus.value = 'idle';
     return;
   }
+  
   uploadedFileMeta.value = {
     name: file.name,
     size: `${(file.size / 1024).toFixed(1)} КБ`,
     type: file.type || file.name.split('.').pop(),
   };
   uploadedFileContent.value = await fileToBase64(file);
+  
+  // Запускаем распознавание
+  recognitionStatus.value = 'processing';
+  manualEditMode.value = false;
+  
+  try {
+    const recognitionResult = await recognizePlan(file);
+    
+    if (recognitionResult.success) {
+      // Автоматически заполняем данные из распознанного плана
+      formData.roomsText = recognitionResult.rooms || '';
+      formData.wallsText = recognitionResult.walls || '';
+      if (recognitionResult.area) formData.area = recognitionResult.area;
+      if (recognitionResult.ceilingHeight) formData.ceilingHeight = recognitionResult.ceilingHeight;
+      recognitionStatus.value = 'success';
+    } else {
+      // Распознавание не удалось - показываем поля для ручного ввода
+      recognitionStatus.value = 'error';
+      manualEditMode.value = true;
+    }
+  } catch (error) {
+    recognitionStatus.value = 'error';
+    manualEditMode.value = true;
+    fileError.value = 'Ошибка при распознавании файла. Пожалуйста, введите данные вручную.';
+  }
 };
 
 const downloadJson = () => {
@@ -925,6 +1021,50 @@ section {
 
 .intake__error {
   color: #ff9b9b;
+}
+
+.intake__success {
+  color: #9cb4ff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.intake__recognition {
+  color: #ffe5a3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.intake__edit-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.intake__edit-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.intake__geometry-section {
+  grid-column: 1 / -1;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.intake__section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #dfe2ea;
 }
 
 .intake__result {
