@@ -3,8 +3,10 @@ module ServerBTI
 go 1.25.0
 
 require (
-	github.com/99designs/gqlgen v0.17.83
+	github.com/99designs/gqlgen v0.17.84
 	github.com/vektah/gqlparser/v2 v2.5.31
+	gorm.io/driver/postgres v1.6.0
+	gorm.io/gorm v1.31.1
 )
 
 require (
@@ -23,6 +25,4 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
-	gorm.io/driver/postgres v1.6.0 // indirect
-	gorm.io/gorm v1.31.1 // indirect
 )
