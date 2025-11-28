@@ -10,6 +10,8 @@ import {
   detectEdges, 
   detectLines, 
   groupLinesIntoWalls, 
+  removeWallConflicts,
+  findMissingWalls,
   detectRooms,
   formatWalls,
   formatRooms,
@@ -131,8 +133,12 @@ export async function recognizePlan(file) {
     // Группируем линии в стены
     console.log('Группировка стен...');
     const mergeDistance = Math.max(6, Math.floor(Math.max(width, height) * 0.003));
-    const walls = groupLinesIntoWalls(lines, mergeDistance, mergeDistance * 1.5);
-    console.log(`Найдено стен: ${walls.length}`);
+    let walls = groupLinesIntoWalls(lines, mergeDistance, mergeDistance * 1.5);
+    console.log(`Найдено стен после группировки: ${walls.length}`);
+    
+    // Дополнительная дедупликация для устранения конфликтов
+    walls = removeWallConflicts(walls, mergeDistance * 2);
+    console.log(`Стен после устранения конфликтов: ${walls.length}`);
     
     // Вычисляем масштаб с учётом метаданных (нужен для detectRooms)
     // Если масштаб указан в метаданных (например, 1:200), используем его
@@ -150,6 +156,17 @@ export async function recognizePlan(file) {
     console.log('Обнаружение комнат...');
     let rooms = detectRooms(walls, width, height, scale);
     console.log(`Найдено геометрических комнат: ${rooms.length}`);
+    
+    // Добавляем недостающие стены на основе границ найденных комнат
+    if (rooms.length > 0) {
+      const missingWalls = findMissingWalls(rooms, walls, scale);
+      if (missingWalls.length > 0) {
+        console.log(`Добавлено ${missingWalls.length} недостающих стен на основе границ комнат`);
+        walls = [...walls, ...missingWalls];
+        // Повторно устраняем конфликты после добавления новых стен
+        walls = removeWallConflicts(walls, mergeDistance * 2);
+      }
+    }
     
     // Если есть комнаты из OCR, сопоставляем их с геометрическими
     if (metadata.rooms && metadata.rooms.length > 0) {

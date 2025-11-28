@@ -139,6 +139,9 @@ export function detectLines(imageData, width, height, minLength = 50, edgeThresh
   const visited = new Set();
   const maxGap = Math.max(3, Math.floor(minLength * 0.05));
   
+  // Снижаем порог для вертикальных линий (они часто слабее на планах)
+  const verticalThreshold = Math.max(90, edgeThreshold - 20);
+  
   // Ищем горизонтальные линии
   for (let y = 0; y < height; y++) {
     let lineStart = null;
@@ -190,7 +193,7 @@ export function detectLines(imageData, width, height, minLength = 50, edgeThresh
     }
   }
   
-  // Ищем вертикальные линии
+  // Ищем вертикальные линии (с более низким порогом)
   for (let x = 0; x < width; x++) {
     let lineStart = null;
     let lineLength = 0;
@@ -200,7 +203,7 @@ export function detectLines(imageData, width, height, minLength = 50, edgeThresh
       const idx = (y * width + x) * 4;
       const value = data[idx];
       
-      if (value > edgeThreshold) {
+      if (value > verticalThreshold) {
         if (lineStart === null) {
           lineStart = y;
           lineLength = 1;
@@ -328,27 +331,264 @@ function dedupeWalls(walls, tolerance = 6) {
   const result = [];
 
   walls.forEach((wall) => {
+    // Ищем перекрывающиеся стены (не только точное совпадение)
     const match = result.find((existing) => {
       if (existing.type !== wall.type) return false;
-      return (
-        Math.abs(existing.start.x - wall.start.x) <= tolerance &&
-        Math.abs(existing.start.y - wall.start.y) <= tolerance &&
-        Math.abs(existing.end.x - wall.end.x) <= tolerance &&
-        Math.abs(existing.end.y - wall.end.y) <= tolerance
-      );
+      
+      // Проверяем, перекрываются ли сегменты
+      if (wall.type === 'horizontal') {
+        // Горизонтальные стены: проверяем Y координату и перекрытие по X
+        const yDiff = Math.abs(existing.start.y - wall.start.y);
+        if (yDiff > tolerance) return false;
+        
+        // Проверяем перекрытие по X
+        const existingLeft = Math.min(existing.start.x, existing.end.x);
+        const existingRight = Math.max(existing.start.x, existing.end.x);
+        const wallLeft = Math.min(wall.start.x, wall.end.x);
+        const wallRight = Math.max(wall.start.x, wall.end.x);
+        
+        // Перекрываются если есть пересечение
+        return !(wallRight < existingLeft - tolerance || wallLeft > existingRight + tolerance);
+      } else {
+        // Вертикальные стены: проверяем X координату и перекрытие по Y
+        const xDiff = Math.abs(existing.start.x - wall.start.x);
+        if (xDiff > tolerance) return false;
+        
+        // Проверяем перекрытие по Y
+        const existingTop = Math.min(existing.start.y, existing.end.y);
+        const existingBottom = Math.max(existing.start.y, existing.end.y);
+        const wallTop = Math.min(wall.start.y, wall.end.y);
+        const wallBottom = Math.max(wall.start.y, wall.end.y);
+        
+        // Перекрываются если есть пересечение
+        return !(wallBottom < existingTop - tolerance || wallTop > existingBottom + tolerance);
+      }
     });
 
     if (match) {
-      match.start.x = Math.min(match.start.x, wall.start.x);
-      match.start.y = Math.min(match.start.y, wall.start.y);
-      match.end.x = Math.max(match.end.x, wall.end.x);
-      match.end.y = Math.max(match.end.y, wall.end.y);
+      // Объединяем сегменты
+      if (wall.type === 'horizontal') {
+        match.start.x = Math.min(match.start.x, wall.start.x, wall.end.x);
+        match.end.x = Math.max(match.end.x, wall.start.x, wall.end.x);
+        match.start.y = (match.start.y + wall.start.y) / 2;
+        match.end.y = match.start.y;
+      } else {
+        match.start.y = Math.min(match.start.y, wall.start.y, wall.end.y);
+        match.end.y = Math.max(match.end.y, wall.start.y, wall.end.y);
+        match.start.x = (match.start.x + wall.start.x) / 2;
+        match.end.x = match.start.x;
+      }
+      
+      // РАЗРЕШАЕМ КОНФЛИКТЫ: приоритет несущей стене
+      // Если одна стена несущая, а другая ненесущая - оставляем несущую
+      if (wall.loadBearing && !match.loadBearing) {
+        match.loadBearing = true;
+        match.thickness = wall.thickness;
+      } else if (!wall.loadBearing && match.loadBearing) {
+        // match уже несущая - оставляем как есть
+      } else {
+        // Обе одного типа - используем более толстую
+        if (wall.thickness > match.thickness) {
+          match.thickness = wall.thickness;
+          match.loadBearing = wall.loadBearing;
+        }
+      }
     } else {
       result.push({ ...wall });
     }
   });
 
   return result;
+}
+
+/**
+ * Удаляет конфликты стен (перекрывающиеся стены с разными типами)
+ * Приоритет: несущие стены
+ */
+export function removeWallConflicts(walls, tolerance = 12) {
+  const result = [];
+  const processed = new Set();
+  
+  // Сортируем стены: сначала несущие (приоритет)
+  const sortedWalls = [...walls].sort((a, b) => {
+    if (a.loadBearing && !b.loadBearing) return -1;
+    if (!a.loadBearing && b.loadBearing) return 1;
+    return 0;
+  });
+  
+  for (let i = 0; i < sortedWalls.length; i++) {
+    if (processed.has(i)) continue;
+    
+    const wall = sortedWalls[i];
+    
+    // Ищем перекрывающиеся стены
+    for (let j = i + 1; j < sortedWalls.length; j++) {
+      if (processed.has(j)) continue;
+      
+      const otherWall = sortedWalls[j];
+      if (wall.type !== otherWall.type) continue;
+      
+      // Проверяем перекрытие
+      const overlaps = wallsOverlap(wall, otherWall, tolerance);
+      if (overlaps) {
+        // Объединяем стены, приоритет несущей
+        if (wall.type === 'horizontal') {
+          wall.start.x = Math.min(wall.start.x, otherWall.start.x, otherWall.end.x);
+          wall.end.x = Math.max(wall.end.x, otherWall.start.x, otherWall.end.x);
+          wall.start.y = (wall.start.y + otherWall.start.y) / 2;
+          wall.end.y = wall.start.y;
+        } else {
+          wall.start.y = Math.min(wall.start.y, otherWall.start.y, otherWall.end.y);
+          wall.end.y = Math.max(wall.end.y, otherWall.start.y, otherWall.end.y);
+          wall.start.x = (wall.start.x + otherWall.start.x) / 2;
+          wall.end.x = wall.start.x;
+        }
+        
+        // Приоритет несущей стене
+        if (wall.loadBearing || otherWall.loadBearing) {
+          wall.loadBearing = true;
+          wall.thickness = Math.max(wall.thickness, otherWall.thickness, 0.4);
+        } else {
+          wall.thickness = Math.max(wall.thickness, otherWall.thickness);
+        }
+        
+        processed.add(j);
+      }
+    }
+    
+    result.push(wall);
+    processed.add(i);
+  }
+  
+  return result;
+}
+
+/**
+ * Находит недостающие стены на основе границ комнат
+ * Создаёт вертикальные и горизонтальные стены для незамкнутых границ
+ */
+export function findMissingWalls(rooms, existingWalls, scale) {
+  const missingWalls = [];
+  const tolerance = 0.1 / scale; // 10 см в пикселях
+  
+  // Группируем существующие стены для быстрого поиска
+  const horizontalWalls = existingWalls.filter(w => w.type === 'horizontal');
+  const verticalWalls = existingWalls.filter(w => w.type === 'vertical');
+  
+  for (const room of rooms) {
+    if (!room.vertices || room.vertices.length < 4) continue;
+    
+    const vertices = room.vertices;
+    
+    // Проверяем каждую сторону комнаты
+    for (let i = 0; i < vertices.length; i++) {
+      const v1 = vertices[i];
+      const v2 = vertices[(i + 1) % vertices.length];
+      
+      // Определяем тип стороны (горизонтальная или вертикальная)
+      const isHorizontal = Math.abs(v1.y - v2.y) < tolerance;
+      const isVertical = Math.abs(v1.x - v2.x) < tolerance;
+      
+      if (!isHorizontal && !isVertical) continue; // Диагональная сторона
+      
+      let wallExists = false;
+      
+      if (isHorizontal) {
+        // Проверяем, есть ли горизонтальная стена для этой стороны
+        const y = (v1.y + v2.y) / 2;
+        const x1 = Math.min(v1.x, v2.x);
+        const x2 = Math.max(v1.x, v2.x);
+        
+        for (const wall of horizontalWalls) {
+          const wallY = wall.start.y;
+          const wallX1 = Math.min(wall.start.x, wall.end.x);
+          const wallX2 = Math.max(wall.start.x, wall.end.x);
+          
+          // Проверяем совпадение Y и перекрытие по X
+          if (Math.abs(wallY - y) < tolerance) {
+            const overlap = !(x2 < wallX1 - tolerance || x1 > wallX2 + tolerance);
+            if (overlap) {
+              wallExists = true;
+              break;
+            }
+          }
+        }
+        
+        if (!wallExists) {
+          // Создаём недостающую горизонтальную стену
+          missingWalls.push({
+            start: { x: x1, y },
+            end: { x: x2, y },
+            type: 'horizontal',
+            loadBearing: true, // Внутренние стены обычно несущие
+            thickness: 0.4
+          });
+        }
+      } else if (isVertical) {
+        // Проверяем, есть ли вертикальная стена для этой стороны
+        const x = (v1.x + v2.x) / 2;
+        const y1 = Math.min(v1.y, v2.y);
+        const y2 = Math.max(v1.y, v2.y);
+        
+        for (const wall of verticalWalls) {
+          const wallX = wall.start.x;
+          const wallY1 = Math.min(wall.start.y, wall.end.y);
+          const wallY2 = Math.max(wall.start.y, wall.end.y);
+          
+          // Проверяем совпадение X и перекрытие по Y
+          if (Math.abs(wallX - x) < tolerance) {
+            const overlap = !(y2 < wallY1 - tolerance || y1 > wallY2 + tolerance);
+            if (overlap) {
+              wallExists = true;
+              break;
+            }
+          }
+        }
+        
+        if (!wallExists) {
+          // Создаём недостающую вертикальную стену
+          missingWalls.push({
+            start: { x, y: y1 },
+            end: { x, y: y2 },
+            type: 'vertical',
+            loadBearing: true, // Внутренние стены обычно несущие
+            thickness: 0.4
+          });
+        }
+      }
+    }
+  }
+  
+  return missingWalls;
+}
+
+/**
+ * Проверяет, перекрываются ли две стены
+ */
+function wallsOverlap(wall1, wall2, tolerance) {
+  if (wall1.type !== wall2.type) return false;
+  
+  if (wall1.type === 'horizontal') {
+    const yDiff = Math.abs(wall1.start.y - wall2.start.y);
+    if (yDiff > tolerance) return false;
+    
+    const w1Left = Math.min(wall1.start.x, wall1.end.x);
+    const w1Right = Math.max(wall1.start.x, wall1.end.x);
+    const w2Left = Math.min(wall2.start.x, wall2.end.x);
+    const w2Right = Math.max(wall2.start.x, wall2.end.x);
+    
+    return !(w1Right < w2Left - tolerance || w1Left > w2Right + tolerance);
+  } else {
+    const xDiff = Math.abs(wall1.start.x - wall2.start.x);
+    if (xDiff > tolerance) return false;
+    
+    const w1Top = Math.min(wall1.start.y, wall1.end.y);
+    const w1Bottom = Math.max(wall1.start.y, wall1.end.y);
+    const w2Top = Math.min(wall2.start.y, wall2.end.y);
+    const w2Bottom = Math.max(wall2.start.y, wall2.end.y);
+    
+    return !(w1Bottom < w2Top - tolerance || w1Top > w2Bottom + tolerance);
+  }
 }
 
 /**
@@ -413,11 +653,13 @@ export function detectRooms(walls, width, height, scale = 0.01) {
         }
         
         // Проверяем наличие вертикальных границ (стен) слева и справа
-        const hasLeftWall = hasVerticalBoundary(groupedVertical, left, topGroup.coord, bottomGroup.coord, 10);
-        const hasRightWall = hasVerticalBoundary(groupedVertical, right, topGroup.coord, bottomGroup.coord, 10);
+        // Увеличиваем tolerance для более гибкого поиска стен
+        const hasLeftWall = hasVerticalBoundary(groupedVertical, left, topGroup.coord, bottomGroup.coord, 15);
+        const hasRightWall = hasVerticalBoundary(groupedVertical, right, topGroup.coord, bottomGroup.coord, 15);
         
-        // Комната должна иметь стены с обеих сторон
-        if (!hasLeftWall || !hasRightWall) {
+        // Комната должна иметь стены с обеих сторон, но если есть хотя бы одна - продолжаем
+        // (внешние стены могут быть не найдены из-за неточности координат)
+        if (!hasLeftWall && !hasRightWall) {
           continue;
         }
         
@@ -790,9 +1032,10 @@ function findHorizontalOverlaps(topSegments, bottomSegments, minWidth) {
   return overlaps;
 }
 
-function hasVerticalBoundary(groupedVertical, x, topY, bottomY, tolerance = 8) {
+function hasVerticalBoundary(groupedVertical, x, topY, bottomY, tolerance = 15) {
   // Ищем в сгруппированных вертикальных стенах
   for (const group of groupedVertical) {
+    // Проверяем, что X координата группы близка к искомой
     if (Math.abs(group.coord - x) > tolerance) continue;
     
     // Проверяем, есть ли сегмент, который покрывает нужный диапазон
@@ -800,7 +1043,8 @@ function hasVerticalBoundary(groupedVertical, x, topY, bottomY, tolerance = 8) {
       const startY = Math.min(segment.start, segment.end);
       const endY = Math.max(segment.start, segment.end);
       
-      if (startY <= topY + tolerance && endY >= bottomY - tolerance) {
+      // Проверяем перекрытие по Y с большим tolerance
+      if (startY <= bottomY + tolerance && endY >= topY - tolerance) {
         return true;
       }
     }
