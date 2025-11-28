@@ -582,7 +582,7 @@ const handleGenerate = () => {
       file: uploadedFileMeta.value
         ? {
             name: uploadedFileMeta.value.name,
-            size: uploadedFileMeta.value.sizeBytes || uploadedFileMeta.value.size, // Приоритет: байты, fallback: строка
+            size: uploadedFileMeta.value.sizeBytes || uploadedFileMeta.value.size, 
             type: uploadedFileMeta.value.type,
             content: uploadedFileContent.value,
           }

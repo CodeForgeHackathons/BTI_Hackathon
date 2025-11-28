@@ -12,22 +12,27 @@ const GRAPHQL_ENDPOINT = import.meta.env.VITE_GRAPHQL_ENDPOINT || '/graphql';
 
 /**
  * Выполняет GraphQL запрос
+ * Сервер принимает запрос как строку
  * @param {string} query - GraphQL запрос или mutation
  * @param {object} variables - Переменные для запроса
  * @returns {Promise<object>} Результат запроса
  */
 export async function graphqlRequest(query, variables = {}) {
   try {
+    // Отправляем стандартный GraphQL формат как строку JSON
+    // Сервер получает: "{ \"query\": \"mutation...\", \"variables\": {...} }"
+    const requestBody = JSON.stringify({
+      query,
+      variables,
+    });
+    
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        query,
-        variables,
-      }),
+      body: requestBody, // Отправляем GraphQL запрос как строку JSON
     });
 
     if (!response.ok) {
