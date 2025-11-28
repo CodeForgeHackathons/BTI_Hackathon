@@ -16,11 +16,14 @@ import {
   calculateRoomArea
 } from './imageProcessor.js';
 
-import { 
-  extractImageFromPDF, 
-  extractTextFromPDF, 
-  parseMetadataFromText 
-} from './pdfProcessor.js';
+// Ленивый импорт PDF процессора (загружается только при необходимости)
+let pdfProcessor = null;
+async function getPdfProcessor() {
+  if (!pdfProcessor) {
+    pdfProcessor = await import('./pdfProcessor.js');
+  }
+  return pdfProcessor;
+}
 
 /**
  * Распознаёт план из загруженного файла
@@ -35,16 +38,24 @@ export async function recognizePlan(file) {
     if (fileType === 'pdf' || file.name.toLowerCase().endsWith('.pdf')) {
       console.log('Обработка PDF файла...');
       
-      // Извлекаем изображение из PDF
-      image = await extractImageFromPDF(file);
-      
-      // Пытаемся извлечь метаданные из текста
       try {
-        const text = await extractTextFromPDF(file);
-        metadata = parseMetadataFromText(text);
-        console.log('Извлечённые метаданные:', metadata);
+        // Ленивая загрузка PDF процессора
+        const pdfModule = await getPdfProcessor();
+        
+        // Извлекаем изображение из PDF
+        image = await pdfModule.extractImageFromPDF(file);
+        
+        // Пытаемся извлечь метаданные из текста
+        try {
+          const text = await pdfModule.extractTextFromPDF(file);
+          metadata = pdfModule.parseMetadataFromText(text);
+          console.log('Извлечённые метаданные:', metadata);
+        } catch (error) {
+          console.warn('Не удалось извлечь текст из PDF:', error);
+        }
       } catch (error) {
-        console.warn('Не удалось извлечь текст из PDF:', error);
+        console.error('Ошибка при обработке PDF:', error);
+        throw new Error('Не удалось обработать PDF файл. Возможно, требуется подключение к интернету для загрузки библиотеки.');
       }
     }
     // Обработка изображений (JPG, PNG)
@@ -67,14 +78,15 @@ export async function recognizePlan(file) {
     // Применяем фильтры
     console.log('Применение фильтров...');
     grayscale(canvas, ctx);
-    const edgesImageData = detectEdges(canvas, ctx);
+    let edgesImageData = detectEdges(canvas, ctx);
     
     // Восстанавливаем imageData для дальнейшей обработки
     ctx.putImageData(edgesImageData, 0, 0);
     
     // Обнаруживаем линии
     console.log('Обнаружение линий...');
-    const lines = detectLines(edgesImageData, width, height, 30);
+    const minLineLength = Math.max(40, Math.floor(Math.max(width, height) * 0.05));
+    const lines = detectLines(edgesImageData, width, height, minLineLength);
     console.log(`Найдено линий: ${lines.length}`);
     
     if (lines.length === 0) {
@@ -83,7 +95,8 @@ export async function recognizePlan(file) {
     
     // Группируем линии в стены
     console.log('Группировка стен...');
-    const walls = groupLinesIntoWalls(lines, 10);
+    const mergeDistance = Math.max(6, Math.floor(Math.max(width, height) * 0.003));
+    const walls = groupLinesIntoWalls(lines, mergeDistance, mergeDistance * 1.5);
     console.log(`Найдено стен: ${walls.length}`);
     
     // Обнаруживаем комнаты
@@ -91,9 +104,9 @@ export async function recognizePlan(file) {
     const rooms = detectRooms(walls, width, height);
     console.log(`Найдено комнат: ${rooms.length}`);
     
-    // Вычисляем масштаб (предполагаем стандартный масштаб)
-    // Можно улучшить, если есть информация о реальных размерах
-    const scale = estimateScale(walls, metadata.area);
+    // Вычисляем масштаб с учётом метаданных
+    const scale = estimateScale(walls, metadata.area, metadata.scale);
+    console.log(`Определённый масштаб: ${scale} (1 пиксель = ${scale} метров)`);
     
     // Форматируем результат
     const roomsText = formatRooms(rooms, scale);
@@ -134,7 +147,8 @@ export async function recognizePlan(file) {
  * Оценивает масштаб изображения (пиксели → метры)
  * Упрощённая эвристика: предполагаем, что средняя длина стены ~3-5 метров
  */
-function estimateScale(walls, knownArea = null) {
+function estimateScale(walls, knownArea = null, providedScale = null) {
+  if (providedScale && providedScale > 0) return providedScale;
   if (walls.length === 0) return 0.01; // По умолчанию
   
   // Вычисляем среднюю длину стены в пикселях

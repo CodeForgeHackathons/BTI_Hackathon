@@ -418,7 +418,20 @@
 
 <script setup>
 import { reactive, ref } from 'vue';
-import { recognizePlan as recognizePlanImage } from './utils/planRecognizer.js';
+
+// Ленивая загрузка распознавателя (чтобы не блокировать загрузку страницы)
+let planRecognizer = null;
+async function getPlanRecognizer() {
+  if (!planRecognizer) {
+    try {
+      planRecognizer = await import('./utils/planRecognizer.js');
+    } catch (error) {
+      console.error('Ошибка загрузки модуля распознавания:', error);
+      throw error;
+    }
+  }
+  return planRecognizer;
+}
 
 const planSources = [
   'PDF / техпаспорт',
@@ -574,6 +587,10 @@ const fileToBase64 = (file) =>
 
 const recognizePlan = async (file) => {
   try {
+    // Ленивая загрузка модуля распознавания
+    const recognizerModule = await getPlanRecognizer();
+    const recognizePlanImage = recognizerModule.recognizePlan;
+    
     // Используем реальное распознавание на клиенте
     const result = await recognizePlanImage(file);
     

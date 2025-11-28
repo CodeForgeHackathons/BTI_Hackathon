@@ -133,18 +133,17 @@ export function detectEdges(canvas, ctx) {
  * Упрощённое обнаружение линий (Hough Transform approximation)
  * Находит горизонтальные и вертикальные линии (стены)
  */
-export function detectLines(imageData, width, height, minLength = 50) {
+export function detectLines(imageData, width, height, minLength = 50, edgeThreshold = 110) {
   const data = imageData.data;
   const lines = [];
   const visited = new Set();
-  
-  // Порог для определения пикселя как части линии
-  const edgeThreshold = 100;
+  const maxGap = Math.max(3, Math.floor(minLength * 0.05));
   
   // Ищем горизонтальные линии
   for (let y = 0; y < height; y++) {
     let lineStart = null;
     let lineLength = 0;
+    let gapCount = 0;
     
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
@@ -154,38 +153,40 @@ export function detectLines(imageData, width, height, minLength = 50) {
         if (lineStart === null) {
           lineStart = x;
           lineLength = 1;
+          gapCount = 0;
         } else {
           lineLength++;
+          gapCount = 0;
         }
       } else {
+        if (lineStart !== null && gapCount < maxGap) {
+          gapCount++;
+          lineLength++;
+          continue;
+        }
+
         if (lineStart !== null && lineLength >= minLength) {
-          const key = `h_${y}_${lineStart}_${x}`;
-          if (!visited.has(key)) {
-            lines.push({
-              type: 'horizontal',
-              start: { x: lineStart, y },
-              end: { x: x - 1, y },
-              length: lineLength
-            });
-            visited.add(key);
-          }
+          addLine(lines, visited, {
+            type: 'horizontal',
+            start: { x: lineStart, y },
+            end: { x: x - 1, y },
+            length: lineLength
+          });
         }
         lineStart = null;
         lineLength = 0;
+        gapCount = 0;
       }
     }
     
     // Проверяем последнюю линию в строке
     if (lineStart !== null && lineLength >= minLength) {
-      const key = `h_${y}_${lineStart}_${width}`;
-      if (!visited.has(key)) {
-        lines.push({
-          type: 'horizontal',
-          start: { x: lineStart, y },
-          end: { x: width - 1, y },
-          length: lineLength
-        });
-      }
+      addLine(lines, visited, {
+        type: 'horizontal',
+        start: { x: lineStart, y },
+        end: { x: width - 1, y },
+        length: lineLength
+      });
     }
   }
   
@@ -193,6 +194,7 @@ export function detectLines(imageData, width, height, minLength = 50) {
   for (let x = 0; x < width; x++) {
     let lineStart = null;
     let lineLength = 0;
+    let gapCount = 0;
     
     for (let y = 0; y < height; y++) {
       const idx = (y * width + x) * 4;
@@ -202,41 +204,54 @@ export function detectLines(imageData, width, height, minLength = 50) {
         if (lineStart === null) {
           lineStart = y;
           lineLength = 1;
+          gapCount = 0;
         } else {
           lineLength++;
+          gapCount = 0;
         }
       } else {
+        if (lineStart !== null && gapCount < maxGap) {
+          gapCount++;
+          lineLength++;
+          continue;
+        }
+
         if (lineStart !== null && lineLength >= minLength) {
-          const key = `v_${x}_${lineStart}_${y}`;
-          if (!visited.has(key)) {
-            lines.push({
-              type: 'vertical',
-              start: { x, y: lineStart },
-              end: { x, y: y - 1 },
-              length: lineLength
-            });
-            visited.add(key);
-          }
+          addLine(lines, visited, {
+            type: 'vertical',
+            start: { x, y: lineStart },
+            end: { x, y: y - 1 },
+            length: lineLength
+          });
         }
         lineStart = null;
         lineLength = 0;
+        gapCount = 0;
       }
     }
     
     if (lineStart !== null && lineLength >= minLength) {
-      const key = `v_${x}_${lineStart}_${height}`;
-      if (!visited.has(key)) {
-        lines.push({
-          type: 'vertical',
-          start: { x, y: lineStart },
-          end: { x, y: height - 1 },
-          length: lineLength
-        });
-      }
+      addLine(lines, visited, {
+        type: 'vertical',
+        start: { x, y: lineStart },
+        end: { x, y: height - 1 },
+        length: lineLength
+      });
     }
   }
   
   return lines;
+}
+
+function addLine(lines, visited, line) {
+  const key =
+    line.type === 'horizontal'
+      ? `h_${line.start.y}_${Math.round(line.start.x / 5)}_${Math.round(line.end.x / 5)}`
+      : `v_${line.start.x}_${Math.round(line.start.y / 5)}_${Math.round(line.end.y / 5)}`;
+
+  if (visited.has(key)) return;
+  visited.add(key);
+  lines.push(line);
 }
 
 /**
@@ -251,7 +266,7 @@ export function pixelsToMeters(pixels, scale = 0.01) {
  * Группирует линии в стены
  * Объединяет близко расположенные линии и определяет тип стены
  */
-export function groupLinesIntoWalls(lines, mergeDistance = 5) {
+export function groupLinesIntoWalls(lines, mergeDistance = 5, dedupeTolerance = 6) {
   const walls = [];
   const processed = new Set();
   
@@ -306,7 +321,34 @@ export function groupLinesIntoWalls(lines, mergeDistance = 5) {
     processed.add(i);
   }
   
-  return walls;
+  return dedupeWalls(walls, dedupeTolerance);
+}
+
+function dedupeWalls(walls, tolerance = 6) {
+  const result = [];
+
+  walls.forEach((wall) => {
+    const match = result.find((existing) => {
+      if (existing.type !== wall.type) return false;
+      return (
+        Math.abs(existing.start.x - wall.start.x) <= tolerance &&
+        Math.abs(existing.start.y - wall.start.y) <= tolerance &&
+        Math.abs(existing.end.x - wall.end.x) <= tolerance &&
+        Math.abs(existing.end.y - wall.end.y) <= tolerance
+      );
+    });
+
+    if (match) {
+      match.start.x = Math.min(match.start.x, wall.start.x);
+      match.start.y = Math.min(match.start.y, wall.start.y);
+      match.end.x = Math.max(match.end.x, wall.end.x);
+      match.end.y = Math.max(match.end.y, wall.end.y);
+    } else {
+      result.push({ ...wall });
+    }
+  });
+
+  return result;
 }
 
 /**
@@ -327,47 +369,97 @@ function calculateLineDistance(line1, line2) {
  */
 export function detectRooms(walls, width, height) {
   const rooms = [];
-  
-  // Находим пересечения стен
-  const intersections = findIntersections(walls);
-  
-  // Группируем стены в замкнутые контуры (упрощённо)
-  // Ищем прямоугольные области
-  const horizontalWalls = walls.filter(w => w.type === 'horizontal').sort((a, b) => a.start.y - b.start.y);
-  const verticalWalls = walls.filter(w => w.type === 'vertical').sort((a, b) => a.start.x - b.start.x);
-  
-  // Группируем по горизонтальным уровням
-  const yLevels = [...new Set(horizontalWalls.map(w => w.start.y))].sort((a, b) => a - b);
-  
-  for (let i = 0; i < yLevels.length - 1; i++) {
-    const topY = yLevels[i];
-    const bottomY = yLevels[i + 1];
-    
-    const topWalls = horizontalWalls.filter(w => Math.abs(w.start.y - topY) < 5);
-    const bottomWalls = horizontalWalls.filter(w => Math.abs(w.start.y - bottomY) < 5);
-    
-    // Ищем пары стен для создания прямоугольников
-    for (const topWall of topWalls) {
-      for (const bottomWall of bottomWalls) {
-        const leftX = Math.max(topWall.start.x, bottomWall.start.x);
-        const rightX = Math.min(topWall.end.x, bottomWall.end.x);
-        
-        if (rightX > leftX && (bottomY - topY) > 20) {
+  const horizontalWalls = walls.filter(w => w.type === 'horizontal');
+  const verticalWalls = walls.filter(w => w.type === 'vertical');
+  if (!horizontalWalls.length || !verticalWalls.length) return rooms;
+
+  const groupedHorizontal = groupWallsByCoordinate(horizontalWalls, 'horizontal');
+  const minRoomWidth = Math.max(40, Math.floor(width * 0.06));
+  const minRoomHeight = Math.max(40, Math.floor(height * 0.06));
+  const roomKeys = new Set();
+
+  for (let i = 0; i < groupedHorizontal.length - 1; i++) {
+    const top = groupedHorizontal[i];
+    for (let j = i + 1; j < groupedHorizontal.length; j++) {
+      const bottom = groupedHorizontal[j];
+      const heightPx = bottom.coord - top.coord;
+      if (heightPx < minRoomHeight) continue;
+
+      const overlaps = findHorizontalOverlaps(top.segments, bottom.segments, minRoomWidth);
+      overlaps.forEach(({ left, right }) => {
+        if (
+          hasVerticalBoundary(verticalWalls, left, top.coord, bottom.coord) &&
+          hasVerticalBoundary(verticalWalls, right, top.coord, bottom.coord)
+        ) {
+          const key = `${Math.round(left / 10)}_${Math.round(top.coord / 10)}_${Math.round(right / 10)}_${Math.round(
+            bottom.coord / 10
+          )}`;
+          if (roomKeys.has(key)) return;
+          roomKeys.add(key);
           rooms.push({
             name: `Помещение ${rooms.length + 1}`,
             vertices: [
-              { x: leftX, y: topY },
-              { x: rightX, y: topY },
-              { x: rightX, y: bottomY },
-              { x: leftX, y: bottomY }
+              { x: left, y: top.coord },
+              { x: right, y: top.coord },
+              { x: right, y: bottom.coord },
+              { x: left, y: bottom.coord }
             ]
           });
         }
-      }
+      });
     }
   }
-  
+
   return rooms;
+}
+
+function groupWallsByCoordinate(walls, orientation, tolerance = 8) {
+  const groups = [];
+
+  walls
+    .slice()
+    .sort((a, b) =>
+      orientation === 'horizontal' ? a.start.y - b.start.y : a.start.x - b.start.x
+    )
+    .forEach((wall) => {
+      const coord = orientation === 'horizontal' ? wall.start.y : wall.start.x;
+      let group = groups.find((g) => Math.abs(g.coord - coord) <= tolerance);
+      if (!group) {
+        group = { coord, segments: [] };
+        groups.push(group);
+      } else {
+        group.coord = (group.coord * group.segments.length + coord) / (group.segments.length + 1);
+      }
+      group.segments.push({
+        start: orientation === 'horizontal' ? wall.start.x : wall.start.y,
+        end: orientation === 'horizontal' ? wall.end.x : wall.end.y,
+      });
+    });
+
+  return groups;
+}
+
+function findHorizontalOverlaps(topSegments, bottomSegments, minWidth) {
+  const overlaps = [];
+  topSegments.forEach(top => {
+    bottomSegments.forEach(bottom => {
+      const left = Math.max(top.start, bottom.start);
+      const right = Math.min(top.end, bottom.end);
+      if (right - left >= minWidth) {
+        overlaps.push({ left, right });
+      }
+    });
+  });
+  return overlaps;
+}
+
+function hasVerticalBoundary(verticalWalls, x, topY, bottomY, tolerance = 8) {
+  return verticalWalls.some((wall) => {
+    if (Math.abs(wall.start.x - x) > tolerance) return false;
+    const startY = Math.min(wall.start.y, wall.end.y);
+    const endY = Math.max(wall.start.y, wall.end.y);
+    return startY <= topY + tolerance && endY >= bottomY - tolerance;
+  });
 }
 
 /**
@@ -459,7 +551,7 @@ export function calculateRoomArea(vertices, scale = 0.01) {
     area += vertices[i].x * vertices[j].y;
     area -= vertices[j].x * vertices[i].y;
   }
-  area = Math.abs(area) / 2;
-  return pixelsToMeters(area * scale, scale);
+  const areaInPixels = Math.abs(area) / 2;
+  return areaInPixels * scale * scale;
 }
 
