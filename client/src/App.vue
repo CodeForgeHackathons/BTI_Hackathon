@@ -54,7 +54,7 @@
             {{ uploadedFileMeta.name }} · {{ uploadedFileMeta.size }} · {{ uploadedFileMeta.type }}
           </small>
           <small v-else-if="recognitionStatus === 'processing'" class="intake__recognition">
-            🔍 Распознаём план... Пожалуйста, подождите.
+            🔍 Распознаём план... Пожалуйста, подождите. Это может занять несколько секунд.
           </small>
           <small v-else>Загрузите файл, чтобы мы распознали план автоматически.</small>
           <small v-if="fileError" class="intake__error">{{ fileError }}</small>
@@ -418,6 +418,7 @@
 
 <script setup>
 import { reactive, ref } from 'vue';
+import { recognizePlan as recognizePlanImage } from './utils/planRecognizer.js';
 
 const planSources = [
   'PDF / техпаспорт',
@@ -466,6 +467,7 @@ const uploadedFileContent = ref('');
 const fileError = ref('');
 const recognitionStatus = ref('idle'); // 'idle' | 'processing' | 'success' | 'error'
 const manualEditMode = ref(false);
+const recognitionStats = ref(null); // Статистика распознавания
 
 const parseRooms = () =>
   formData.roomsText
@@ -571,27 +573,23 @@ const fileToBase64 = (file) =>
   });
 
 const recognizePlan = async (file) => {
-  // Симуляция API распознавания плана
-  // В реальном приложении здесь будет запрос к бэкенду с компьютерным зрением
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Случайно выбираем успех или ошибку для демонстрации
-      const success = Math.random() > 0.3; // 70% успех
-      
-      if (success) {
-        // Симулируем успешное распознавание
-        resolve({
-          success: true,
-          rooms: 'Гостиная:0,0;5.2,0;5.2,4.1;0,4.1\nКухня:5.2,0;8.0,0;8.0,3.5;5.2,3.5\nСпальня:0,4.1;5.2,4.1;5.2,7.5;0,7.5',
-          walls: '0,0 -> 5.2,0; ненесущая; 0.12\n5.2,0 -> 8.0,0; несущая; 0.4\n0,0 -> 0,7.5; несущая; 0.4',
-          area: '62.5',
-          ceilingHeight: '2.7'
-        });
-      } else {
-        resolve({ success: false });
-      }
-    }, 2000); // Симуляция обработки 2 секунды
-  });
+  try {
+    // Используем реальное распознавание на клиенте
+    const result = await recognizePlanImage(file);
+    
+    // Если успешно, заполняем также адрес, если он был извлечён
+    if (result.success && result.address) {
+      formData.address = result.address;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Ошибка распознавания:', error);
+    return {
+      success: false,
+      error: error.message || 'Ошибка при распознавании плана'
+    };
+  }
 };
 
 const enableManualEdit = () => {
@@ -606,6 +604,7 @@ const handleFileChange = async (event) => {
     uploadedFileContent.value = '';
     recognitionStatus.value = 'idle';
     manualEditMode.value = false;
+    recognitionStats.value = null;
     return;
   }
   const allowedTypes = [
@@ -647,15 +646,23 @@ const handleFileChange = async (event) => {
       if (recognitionResult.area) formData.area = recognitionResult.area;
       if (recognitionResult.ceilingHeight) formData.ceilingHeight = recognitionResult.ceilingHeight;
       recognitionStatus.value = 'success';
+      recognitionStats.value = recognitionResult.stats || null;
+      
+      // Показываем статистику распознавания в консоли
+      if (recognitionResult.stats) {
+        console.log('Статистика распознавания:', recognitionResult.stats);
+      }
     } else {
       // Распознавание не удалось - показываем поля для ручного ввода
       recognitionStatus.value = 'error';
       manualEditMode.value = true;
+      fileError.value = recognitionResult.error || 'Не удалось распознать план. Пожалуйста, введите данные вручную.';
     }
   } catch (error) {
     recognitionStatus.value = 'error';
     manualEditMode.value = true;
-    fileError.value = 'Ошибка при распознавании файла. Пожалуйста, введите данные вручную.';
+    fileError.value = error.message || 'Ошибка при распознавании файла. Пожалуйста, введите данные вручную.';
+    console.error('Критическая ошибка распознавания:', error);
   }
 };
 
@@ -1065,6 +1072,12 @@ section {
   font-weight: 600;
   margin-bottom: 16px;
   color: #dfe2ea;
+}
+
+.intake__stats {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-left: 8px;
 }
 
 .intake__result {
