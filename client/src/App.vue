@@ -2,9 +2,9 @@
   <div class="page">
     <header class="hero">
       <div class="hero__content">
-        <p class="hero__badge">Прототип хакатона</p>
+        <p class="hero__badge">HomePlanner3D</p>
         <h1>
-          Планировщик ремонта — перепланируйте уверенно и без лишних рисков
+          HomePlanner3D — перепланируйте уверенно и без лишних рисков
         </h1>
         <p class="hero__subtitle">
           Загрузите план квартиры, получите автоматический анализ несущих стен,
@@ -160,7 +160,7 @@
 
     <footer class="footer">
       <div>
-        <p class="footer__brand">Планировщик ремонта</p>
+        <p class="footer__brand">HomePlanner3D — Планировщик ремонта</p>
         <p>Цифровой помощник перепланировки. Прототип для хакатона.</p>
       </div>
       <div class="footer__links">
