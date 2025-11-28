@@ -57,6 +57,7 @@ type ComplexityRoot struct {
 	}
 
 	User struct {
+		Birthday func(childComplexity int) int
 		Email    func(childComplexity int) int
 		ID       func(childComplexity int) int
 		Login    func(childComplexity int) int
@@ -126,6 +127,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.GetUser(childComplexity, args["id"].(string)), true
 
+	case "User.birthday":
+		if e.complexity.User.Birthday == nil {
+			break
+		}
+
+		return e.complexity.User.Birthday(childComplexity), true
 	case "User.email":
 		if e.complexity.User.Email == nil {
 			break
@@ -406,6 +413,8 @@ func (ec *executionContext) fieldContext_Mutation_register(ctx context.Context, 
 				return ec.fieldContext_User_login(ctx, field)
 			case "username":
 				return ec.fieldContext_User_username(ctx, field)
+			case "birthday":
+				return ec.fieldContext_User_birthday(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -498,6 +507,8 @@ func (ec *executionContext) fieldContext_Query_getUser(ctx context.Context, fiel
 				return ec.fieldContext_User_login(ctx, field)
 			case "username":
 				return ec.fieldContext_User_username(ctx, field)
+			case "birthday":
+				return ec.fieldContext_User_birthday(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -728,6 +739,35 @@ func (ec *executionContext) _User_username(ctx context.Context, field graphql.Co
 }
 
 func (ec *executionContext) fieldContext_User_username(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _User_birthday(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_User_birthday,
+		func(ctx context.Context) (any, error) {
+			return obj.Birthday, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_User_birthday(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "User",
 		Field:      field,
@@ -2227,7 +2267,7 @@ func (ec *executionContext) unmarshalInputRegisterInput(ctx context.Context, obj
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"email", "login", "username", "password"}
+	fieldsInOrder := [...]string{"email", "login", "username", "password", "birthday"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -2262,6 +2302,13 @@ func (ec *executionContext) unmarshalInputRegisterInput(ctx context.Context, obj
 				return it, err
 			}
 			it.Password = data
+		case "birthday":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("birthday"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Birthday = data
 		}
 	}
 
@@ -2426,6 +2473,11 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "username":
 			out.Values[i] = ec._User_username(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "birthday":
+			out.Values[i] = ec._User_birthday(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

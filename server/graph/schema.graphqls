@@ -7,6 +7,7 @@ type User{
   email: String!
   login: String!
   username: String!
+  birthday: String!
 }
 input BTI_agent{
   id: ID!
@@ -22,6 +23,7 @@ input RegisterInput {
   login: String!
   username: String!
   password: String!
+  birthday: String!
 }
 
 type Mutation {

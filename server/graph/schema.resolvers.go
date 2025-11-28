@@ -21,6 +21,7 @@ func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInp
 		Username: input.Username,
 		Password: input.Password,
 		Email:    input.Email,
+		Birthday: input.Birthday,
 	}
 	user_graphql := &model.User{
 		ID:       fmt.Sprintf("%d", user_DataBase.ID),
