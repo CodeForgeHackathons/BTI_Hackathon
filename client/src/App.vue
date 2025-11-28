@@ -418,6 +418,7 @@
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
+import { graphqlRequest, CREATE_PLANNING_PROJECT_MUTATION } from './utils/graphqlClient.js';
 
 // Ленивая загрузка распознавателя (чтобы не блокировать загрузку страницы)
 let planRecognizer = null;
@@ -581,7 +582,7 @@ const handleGenerate = () => {
       file: uploadedFileMeta.value
         ? {
             name: uploadedFileMeta.value.name,
-            size: uploadedFileMeta.value.size,
+            size: uploadedFileMeta.value.sizeBytes || uploadedFileMeta.value.size, // Приоритет: байты, fallback: строка
             type: uploadedFileMeta.value.type,
             content: uploadedFileContent.value,
           }
@@ -601,10 +602,76 @@ const handleGenerate = () => {
   generatedJson.value = JSON.stringify(payload, null, 2);
 };
 
-const fakeSendToApi = () =>
-  new Promise((resolve) => {
-    setTimeout(() => resolve({ ok: true }), 1200);
-  });
+/**
+ * Отправляет данные проекта на бэкенд через GraphQL
+ */
+const sendToApi = async (payload) => {
+  try {
+    // Подготавливаем данные для GraphQL
+    const input = {
+      plan: {
+        address: payload.plan.address || null,
+        area: payload.plan.area,
+        source: payload.plan.source,
+        layoutType: payload.plan.layoutType,
+        familyProfile: payload.plan.familyProfile,
+        goal: payload.plan.goal || null,
+        prompt: payload.plan.prompt || null,
+        ceilingHeight: payload.plan.ceilingHeight,
+        floorDelta: payload.plan.floorDelta || 0,
+        recognitionStatus: payload.plan.recognitionStatus,
+        file: payload.plan.file ? {
+          name: payload.plan.file.name,
+          size: payload.plan.file.size,
+          type: payload.plan.file.type,
+          content: payload.plan.file.content, // base64 строка
+        } : null,
+      },
+      geometry: {
+        rooms: payload.geometry.rooms.map(room => ({
+          id: room.id,
+          name: room.name,
+          height: room.height,
+          vertices: room.vertices.map(v => ({
+            x: v.x,
+            y: v.y,
+          })),
+        })),
+      },
+      walls: payload.walls.map(wall => ({
+        id: wall.id,
+        start: {
+          x: wall.start.x,
+          y: wall.start.y,
+        },
+        end: {
+          x: wall.end.x,
+          y: wall.end.y,
+        },
+        loadBearing: wall.loadBearing,
+        thickness: wall.thickness,
+      })),
+      constraints: {
+        forbiddenMoves: payload.constraints.forbiddenMoves,
+        regionRules: payload.constraints.regionRules || null,
+      },
+      timestamp: payload.timestamp,
+    };
+
+    // Отправляем GraphQL запрос
+    const result = await graphqlRequest(CREATE_PLANNING_PROJECT_MUTATION, {
+      input,
+    });
+
+    return {
+      ok: true,
+      data: result.createPlanningProject,
+    };
+  } catch (error) {
+    console.error('Ошибка отправки данных на сервер:', error);
+    throw error;
+  }
+};
 
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -673,7 +740,8 @@ const handleFileChange = async (event) => {
   
   uploadedFileMeta.value = {
     name: file.name,
-    size: `${(file.size / 1024).toFixed(1)} КБ`,
+    size: `${(file.size / 1024).toFixed(1)} КБ`, // Для отображения
+    sizeBytes: file.size, // Оригинальный размер в байтах для отправки на сервер
     type: file.type || file.name.split('.').pop(),
   };
   uploadedFileContent.value = await fileToBase64(file);
@@ -736,18 +804,44 @@ const downloadJson = () => {
 const handleSubmit = async () => {
   submitStatus.value = '';
   handleGenerate();
-  if (!generatedJson.value) return;
-  isSubmitting.value = true;
+  if (!generatedJson.value) {
+    submitStatus.value = 'Ошибка: не удалось сформировать данные для отправки.';
+    return;
+  }
+
+  // Парсим payload из JSON
+  let payload;
   try {
-    const response = await fakeSendToApi();
-    if (response.ok) {
-      submitStatus.value = 'Данные приняты. Мы готовим визуализацию и проверяем нормы.';
+    payload = JSON.parse(generatedJson.value);
+  } catch (error) {
+    submitStatus.value = 'Ошибка: неверный формат данных.';
+    console.error('Ошибка парсинга payload:', error);
+    return;
+  }
+
+  isSubmitting.value = true;
+  submitStatus.value = 'Отправляем данные на сервер...';
+
+  try {
+    const response = await sendToApi(payload);
+    
+    if (response.ok && response.data) {
+      submitStatus.value = 'Данные успешно отправлены! Мы готовим визуализацию и проверяем нормы.';
+      
+      // Сохраняем ID проекта для дальнейшего использования
+      if (response.data.id) {
+        console.log('Проект создан с ID:', response.data.id);
+        // Можно сохранить в localStorage или state для дальнейшей работы
+      }
+      
+      // Опционально: скачиваем JSON как резервную копию
       downloadJson();
     } else {
       submitStatus.value = 'Не удалось отправить данные. Попробуйте ещё раз.';
     }
   } catch (error) {
-    submitStatus.value = 'Произошла ошибка при связи с API.';
+    console.error('Ошибка отправки:', error);
+    submitStatus.value = `Ошибка при связи с API: ${error.message || 'Неизвестная ошибка'}`;
   } finally {
     isSubmitting.value = false;
   }
