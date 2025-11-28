@@ -137,6 +137,15 @@
           />
           <small>Мы используем это при генерации вариантов.</small>
         </label>
+        <label class="intake__wide">
+          Желания по перепланировке
+          <textarea
+            v-model="formData.prompt"
+            rows="4"
+            placeholder="Объединить кухню и гостиную, перенести дверь в спальню, добавить гардеробную."
+          ></textarea>
+          <small>Опишите словами, что хотите изменить. Эти пожелания проверяются и учитываются при подготовке вариантов.</small>
+        </label>
         <div class="intake__actions">
           <button type="submit" class="btn btn--primary btn--small" :disabled="isSubmitting">
             {{ isSubmitting ? 'Отправляем...' : 'Отправить в систему' }}
@@ -406,6 +415,7 @@ const formData = reactive({
   layoutType: layoutTypes[1],
   familyProfile: familyProfiles[0],
   goal: 'Больше света и рабочее место',
+  prompt: 'Объединить кухню и гостиную, добавить гардероб у входа',
   ceilingHeight: '2.7',
   floorDelta: '0',
   roomsText: 'Гостиная:0,0;5.2,0;5.2,4.1;0,4.1',
@@ -482,6 +492,7 @@ const handleGenerate = () => {
       layoutType: formData.layoutType,
       familyProfile: formData.familyProfile,
       goal: formData.goal,
+      prompt: formData.prompt,
       ceilingHeight: Number(formData.ceilingHeight) || null,
       floorDelta: Number(formData.floorDelta) || 0,
       file: uploadedFileMeta.value
