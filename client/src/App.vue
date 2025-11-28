@@ -2,7 +2,7 @@
   <div class="page">
     <header class="hero">
       <div class="hero__topbar">
-        <span class="hero__logo">HomePlanner3D</span>
+        <span class="hero__logo"></span>
         <div class="hero__top-actions">
           <span v-if="currentUser" class="hero__user">
             {{ currentUser.username || currentUser.login }}
