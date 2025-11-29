@@ -29,8 +29,121 @@ input RegisterInput {
 type Mutation {
   register(input: RegisterInput!): User!
   askBTIagent(input: BTI_agent!): String
+  createPlanningProject(input: PlanningProjectInput!): PlanningProject!
+
+}
+input VertexInput {
+  x: Float!
+  y: Float!
 }
 
+input RoomInput {
+  id: ID
+  name: String!
+  height: Float!
+  vertices: [VertexInput!]!
+}
+
+input WallEndInput {
+  x: Float!
+  y: Float!
+}
+
+input WallInput {
+  id: ID
+  start: WallEndInput!
+  end: WallEndInput!
+  loadBearing: Boolean!
+  thickness: Float!
+}
+
+input ConstraintsInput {
+  forbiddenMoves: [String!]
+  regionRules: [String!]
+}
+
+input GeometryInput {
+  rooms: [RoomInput!]!
+}
+
+input PlanInput {
+  address: String!
+  area: Float!
+  source: String!
+  layoutType: String!
+  familyProfile: String!
+  goal: String!
+  prompt: String!
+  ceilingHeight: Float!
+  floorDelta: Float!
+  recognitionStatus: String!
+}
+
+input PlanningProjectInput {
+  plan: PlanInput!
+  geometry: GeometryInput!
+  walls: [WallInput!]!
+  constraints: ConstraintsInput
+}
+
+# ------------ OUTPUT TYPES ------------
+
+type Vertex {
+  x: Float!
+  y: Float!
+}
+
+type Room {
+  id: ID!
+  name: String!
+  height: Float!
+  vertices: [Vertex!]!
+}
+
+type Geometry {
+  rooms: [Room!]!
+}
+
+type WallEnd {
+  x: Float!
+  y: Float!
+}
+
+type Wall {
+  id: ID!
+  start: WallEnd!
+  end: WallEnd!
+  loadBearing: Boolean!
+  thickness: Float!
+}
+
+type Constraints {
+  forbiddenMoves: [String!]
+  regionRules: [String!]
+}
+
+type Plan {
+  address: String!
+  area: Float!
+  source: String!
+  layoutType: String!
+  familyProfile: String!
+  goal: String!
+  prompt: String!
+  ceilingHeight: Float!
+  floorDelta: Float!
+  recognitionStatus: String!
+}
+
+type PlanningProject {
+  id: ID!
+  status: String!
+  createdAt: Time!
+  plan: Plan!
+  geometry: Geometry!
+  walls: [Wall!]!
+  constraints: Constraints
+}
 
 
 
