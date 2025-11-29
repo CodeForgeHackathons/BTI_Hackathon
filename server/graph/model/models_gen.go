@@ -18,6 +18,7 @@ type RegisterInput struct {
 	Login    string `json:"login"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Birthday string `json:"birthday"`
 }
 
 type User struct {
@@ -25,4 +26,5 @@ type User struct {
 	Email    string `json:"email"`
 	Login    string `json:"login"`
 	Username string `json:"username"`
+	Birthday string `json:"birthday"`
 }
