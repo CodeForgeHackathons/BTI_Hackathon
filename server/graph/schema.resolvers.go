@@ -77,7 +77,16 @@ func (r *mutationResolver) CreatePlanningProject(ctx context.Context, input mode
         if len(input.Constraints.ForbiddenMoves) > 0 { sb.WriteString("; Запреты: "); sb.WriteString(strings.Join(input.Constraints.ForbiddenMoves, ",")) }
     }
     aiPrompt := sb.String()
-    aiAnalyze, err := assistant.AiAnalyze(aiPrompt)
+    var aiAnalyze *assistant.BTIResponse
+    var err error
+    if v := ctx.Value("yandexAPIKey"); v != nil {
+        if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+            aiAnalyze, err = assistant.AiAnalyzeWithKey(aiPrompt, s)
+        }
+    }
+    if aiAnalyze == nil {
+        aiAnalyze, err = assistant.AiAnalyze(aiPrompt)
+    }
     log.Printf("AI prompt len: %d", len(aiPrompt))
     if err != nil || aiAnalyze == nil {
         log.Printf("AI analyze failed: %v", err)
@@ -293,15 +302,27 @@ func (r *queryResolver) GetUserProject(ctx context.Context, projectID string, us
 
 // GetUserProjects is the resolver for the getUserProjects field.
 func (r *queryResolver) GetUserProjects(ctx context.Context, userID string) ([]*model.PlanningProject, error) {
-	var dbProjects []models.PlanningProject
+    var dbProjects []models.PlanningProject
 
-	var uid int64
-	if _, err := fmt.Sscanf(userID, "%d", &uid); err != nil {
-		return nil, fmt.Errorf("неверный формат ID пользователя")
-	}
-	if err := r.DB.Where("user_id = ?", uid).Order("created_at DESC").Find(&dbProjects).Error; err != nil {
-		return nil, fmt.Errorf("ошибка при поиске проектов: %w", err)
-	}
+    var uid int64
+    if _, err := fmt.Sscanf(userID, "%d", &uid); err != nil {
+        return nil, fmt.Errorf("неверный формат ID пользователя")
+    }
+    onlyApproved := false
+    if v := ctx.Value("onlyApproved"); v != nil {
+        if s, ok := v.(string); ok {
+            if strings.EqualFold(strings.TrimSpace(s), "true") {
+                onlyApproved = true
+            }
+        }
+    }
+    q := r.DB.Where("user_id = ?", uid)
+    if onlyApproved {
+        q = q.Where("status = ?", "можно")
+    }
+    if err := q.Order("created_at DESC").Find(&dbProjects).Error; err != nil {
+        return nil, fmt.Errorf("ошибка при поиске проектов: %w", err)
+    }
 
 	// Конвертируем в GraphQL модели
 	var graphQLProjects []*model.PlanningProject

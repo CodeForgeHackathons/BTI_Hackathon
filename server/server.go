@@ -3,6 +3,7 @@ package main
 import (
     "ServerBTI/graph"
     "ServerBTI/internal/db"
+    "bufio"
     "context"
     "github.com/99designs/gqlgen/graphql/handler"
     "github.com/99designs/gqlgen/graphql/handler/extension"
@@ -13,16 +14,17 @@ import (
     "log"
     "net/http"
     "os"
+    "strings"
 )
 
 const defaultPort = "8080"
 
 func main() {
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = defaultPort
-	}
+    loadDotEnv()
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = defaultPort
+    }
 
 	database, err := db.InitDataBase()
 	if err != nil {
@@ -45,7 +47,7 @@ func main() {
     http.Handle("/", playground.Handler("GraphQL playground", "/query"))
     http.Handle("/query", withUserIDContext(srv))
 
-	log.Printf("connect to http://localhost:%s/ for GraphQL playground", port)
+    log.Printf("connect to http://localhost:%s/ for GraphQL playground", port)
     log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
@@ -53,7 +55,35 @@ func main() {
 func withUserIDContext(h http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         uid := r.Header.Get("X-User-Id")
+        apiKey := r.Header.Get("X-Yandex-Api-Key")
+        onlyApproved := r.Header.Get("X-Only-Approved")
         ctx := context.WithValue(r.Context(), "userID", uid)
+        ctx = context.WithValue(ctx, "yandexAPIKey", apiKey)
+        ctx = context.WithValue(ctx, "onlyApproved", onlyApproved)
         h.ServeHTTP(w, r.WithContext(ctx))
     })
+}
+
+func loadDotEnv() {
+    f, err := os.Open(".env")
+    if err != nil {
+        return
+    }
+    defer f.Close()
+    scanner := bufio.NewScanner(f)
+    for scanner.Scan() {
+        line := strings.TrimSpace(scanner.Text())
+        if line == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
+        parts := strings.SplitN(line, "=", 2)
+        if len(parts) != 2 {
+            continue
+        }
+        key := strings.TrimSpace(parts[0])
+        val := strings.TrimSpace(parts[1])
+        if key != "" {
+            os.Setenv(key, val)
+        }
+    }
 }

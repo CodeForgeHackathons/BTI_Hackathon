@@ -22,14 +22,20 @@ export async function graphqlRequest(query, variables = {}) {
     // Пытаемся достать токен авторизации для ЛК (если он сохранён)
     let token = null;
     let userIdHeader = null;
+    let yandexApiKeyHeader = null;
+    let onlyApprovedHeader = null;
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         token = window.localStorage.getItem('authToken');
         userIdHeader = window.localStorage.getItem('homeplanner3d:userId');
+        yandexApiKeyHeader = window.localStorage.getItem('homeplanner3d:yandexAPIKey');
+        onlyApprovedHeader = window.localStorage.getItem('homeplanner3d:onlyApproved');
       }
     } catch {
       token = null;
       userIdHeader = null;
+      yandexApiKeyHeader = null;
+      onlyApprovedHeader = null;
     }
 
     const headers = {
@@ -42,6 +48,12 @@ export async function graphqlRequest(query, variables = {}) {
     }
     if (userIdHeader) {
       headers['X-User-Id'] = String(userIdHeader);
+    }
+    if (yandexApiKeyHeader) {
+      headers['X-Yandex-Api-Key'] = String(yandexApiKeyHeader);
+    }
+    if (onlyApprovedHeader) {
+      headers['X-Only-Approved'] = String(onlyApprovedHeader);
     }
     
     // Формируем тело запроса в стандартном GraphQL формате

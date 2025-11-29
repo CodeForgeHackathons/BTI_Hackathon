@@ -1,14 +1,15 @@
 package assistant
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"strings"
-	"time"
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io"
+    "log"
+    "net/http"
+    "os"
+    "strings"
+    "time"
 )
 
 const (
@@ -57,7 +58,7 @@ func AiAnalyze(userQuestion string) (*BTIResponse, error) {
         userQuestion = userQuestion[:450000]
     }
 
-    instr := "Ты эксперт БТИ. Верни только JSON без текста: {\"is_valid\":bool,\"decision\":string,\"justification\":string,\"technical_basis\":[string],\"limitations_risks\":[string],\"clarification_needed\":[string]}"
+    instr := "Ты инженер БТИ. Возвращай строго JSON без лишнего текста в формате {\\\"is_valid\\\":bool,\\\"decision\\\":string,\\\"justification\\\":string,\\\"technical_basis\\\":[string],\\\"limitations_risks\\\":[string],\\\"clarification_needed\\\":[string]}. Если нет явных нарушений нормативов и несущих конструкций, decision=\\\"можно\\\", is_valid=true. При недостаточности данных или возможных ограничениях — decision=\\\"можно при условиях\\\", is_valid=true. Значение decision=\\\"нельзя\\\" и is_valid=false ставь только при очевидном запрете."
 
     request := YandexAIRequest{
         ModelURI: modelURI,
@@ -85,12 +86,44 @@ func AiAnalyze(userQuestion string) (*BTIResponse, error) {
 
 }
 
-func sendToYandexAI(request YandexAIRequest) (string, error) {
-	iamToken := "AQVNz9lGnH1iOytu7Nu2XfHYXDhsZOrwepr5x56k"
+func AiAnalyzeWithKey(userQuestion string, apiKey string) (*BTIResponse, error) {
+    if len(userQuestion) > 450000 {
+        userQuestion = userQuestion[:450000]
+    }
 
-	if iamToken == "" {
-		return "", fmt.Errorf("Api key not found")
-	}
+    instr := "Ты инженер БТИ. Возвращай строго JSON без лишнего текста в формате {\\\"is_valid\\\":bool,\\\"decision\\\":string,\\\"justification\\\":string,\\\"technical_basis\\\":[string],\\\"limitations_risks\\\":[string],\\\"clarification_needed\\\":[string]}. Если нет явных нарушений нормативов и несущих конструкций, decision=\\\"можно\\\", is_valid=true. При недостаточности данных или возможных ограничениях — decision=\\\"можно при условиях\\\", is_valid=true. Значение decision=\\\"нельзя\\\" и is_valid=false ставь только при очевидном запрете."
+
+    request := YandexAIRequest{
+        ModelURI: modelURI,
+        CompletionOptions: CompletionOptions{
+            Temperature: 0.3,
+            MaxTokens:   3000,
+        },
+        Messages: []Message{
+            {Role: "system", Text: instr},
+            {Role: "user", Text: userQuestion},
+        },
+    }
+
+    response, err := sendToYandexAIWithKey(request, apiKey)
+    if err != nil {
+        return createFallbackResponse(userQuestion), nil
+    }
+
+    btiResponse, err := parseAiResponse(response)
+    if err != nil {
+        return createFallbackResponse(response), nil
+    }
+
+    return btiResponse, nil
+}
+
+func sendToYandexAI(request YandexAIRequest) (string, error) {
+    iamToken := os.Getenv("YANDEX_CLOUD_API_KEY")
+
+    if iamToken == "" {
+        return "", fmt.Errorf("Api key not found")
+    }
 
 	jsonData, err := json.Marshal(request)
 	if err != nil {
@@ -133,6 +166,53 @@ func sendToYandexAI(request YandexAIRequest) (string, error) {
 
 	return "", fmt.Errorf("пустой ответ от AI")
 }
+
+func sendToYandexAIWithKey(request YandexAIRequest, iamToken string) (string, error) {
+    if strings.TrimSpace(iamToken) == "" {
+        return "", fmt.Errorf("Api key not found")
+    }
+
+    jsonData, err := json.Marshal(request)
+    if err != nil {
+        return "", fmt.Errorf("ошибка создания JSON: %w", err)
+    }
+
+    req, err := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonData))
+    if err != nil {
+        return "", fmt.Errorf("ошибка создания запроса: %w", err)
+    }
+
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Authorization", "Bearer "+iamToken)
+    req.Header.Set("X-Folder-Id", folderID)
+
+    client := &http.Client{Timeout: 30 * time.Second}
+    resp, err := client.Do(req)
+    if err != nil {
+        return "", fmt.Errorf("ошибка отправки запроса: %w", err)
+    }
+    defer resp.Body.Close()
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return "", fmt.Errorf("ошибка чтения ответа: %w", err)
+    }
+
+    if resp.StatusCode != http.StatusOK {
+        return "", fmt.Errorf("ошибка API (статус %d): %s", resp.StatusCode, string(body))
+    }
+
+    var aiResponse YandexAIResponse
+    if err := json.Unmarshal(body, &aiResponse); err != nil {
+        return "", fmt.Errorf("ошибка парсинга ответа: %w", err)
+    }
+
+    if len(aiResponse.Result.Alternatives) > 0 {
+        return aiResponse.Result.Alternatives[0].Message.Text, nil
+    }
+
+    return "", fmt.Errorf("пустой ответ от AI")
+}
 func parseAiResponse(aiRawResponse string) (*BTIResponse, error) {
 	cleanedResponse := cleanAIResponse(aiRawResponse)
 
@@ -165,37 +245,38 @@ func cleanAIResponse(response string) string {
 }
 
 func createFallbackResponse(aiRawResponse string) *BTIResponse {
-	response := &BTIResponse{
-		IsValid:             true,
-		Decision:            "можно",
-		Justification:       "Автоматическая проверка пройдена",
-		TechnicalBasis:      []string{},
-		LimitationsRisks:    []string{"Требуется ручная проверка инженером"},
-		ClarificationNeeded: []string{"Необходима полная техническая документация"},
-	}
+    response := &BTIResponse{
+        IsValid:             false,
+        Decision:            "pending",
+        Justification:       "Требуется уточнение данных",
+        TechnicalBasis:      []string{},
+        LimitationsRisks:    []string{"Требуется ручная проверка инженером"},
+        ClarificationNeeded: []string{"Необходима полная техническая документация"},
+    }
 
-	lowerResponse := strings.ToLower(aiRawResponse)
+    lowerResponse := strings.ToLower(aiRawResponse)
 
-	if strings.Contains(lowerResponse, "нельзя") &&
-		!strings.Contains(lowerResponse, "можно") {
-		response.IsValid = false
-		response.Decision = "нельзя"
-	} else if strings.Contains(lowerResponse, "услови") ||
-		strings.Contains(lowerResponse, "ограничен") {
-		response.Decision = "можно при условиях"
-	}
-	if strings.Contains(aiRawResponse, "обоснование") || strings.Contains(aiRawResponse, "justification") {
-		lines := strings.Split(aiRawResponse, "\n")
-		for _, line := range lines {
-			if strings.Contains(strings.ToLower(line), "обоснование") ||
-				strings.Contains(strings.ToLower(line), "justification") {
-				parts := strings.Split(line, ":")
-				if len(parts) > 1 {
-					response.Justification = strings.TrimSpace(parts[1])
-				}
-			}
-		}
-	}
+    if strings.Contains(lowerResponse, "нельзя") ||
+        strings.Contains(lowerResponse, "запрещ") ||
+        strings.Contains(lowerResponse, "противоречит") ||
+        strings.Contains(lowerResponse, "не допуска") {
+        response.IsValid = false
+        response.Decision = "нельзя"
+    } else if strings.Contains(lowerResponse, "услови") || strings.Contains(lowerResponse, "ограничен") {
+        response.Decision = "можно при условиях"
+    }
+    if strings.Contains(aiRawResponse, "обоснование") || strings.Contains(aiRawResponse, "justification") {
+        lines := strings.Split(aiRawResponse, "\n")
+        for _, line := range lines {
+            if strings.Contains(strings.ToLower(line), "обоснование") ||
+                strings.Contains(strings.ToLower(line), "justification") {
+                parts := strings.Split(line, ":")
+                if len(parts) > 1 {
+                    response.Justification = strings.TrimSpace(parts[1])
+                }
+            }
+        }
+    }
 
-	return response
+    return response
 }
