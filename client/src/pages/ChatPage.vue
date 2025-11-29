@@ -157,6 +157,13 @@ onMounted(scrollBottom);
 
 @media (max-width: 768px) {
   .chat__hero { flex-direction: column; gap: 12px; }
+  .chat__window { min-height: 360px; }
+}
+
+@media (max-width: 480px) {
+  .chat { margin: 32px auto 64px; }
+  .chat__window { min-height: 320px; }
+  .msg__text { font-size: 14px; }
+  .chat__input textarea { min-height: 80px; }
 }
 </style>
-

@@ -296,10 +296,12 @@ defineEmits(['back', 'open-auth', 'logout']);
 @media (max-width: 480px) {
   .lk__hero {
     border-radius: 20px;
+    padding: 24px;
   }
 
   .lk-card {
     border-radius: 16px;
+    padding: 16px;
   }
 
   .lk-card__pills {
