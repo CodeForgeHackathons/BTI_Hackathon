@@ -24,7 +24,7 @@
           <button class="chip" @click="openAttach" v-if="!attachedProject">Прикрепить проект</button>
           <button class="chip" @click="changeAttachment" v-else>Сменить проект</button>
         </div>
-        <div v-if="attachedProject" class="constructor__canvas-wrap" @wheel.prevent="onWheel" @mousedown="onPointerDown" @mousemove="onPointerMove" @mouseup="onPointerUp" @mouseleave="onPointerUp" @click="onCanvasClick">
+        <div v-if="attachedProject" class="constructor__canvas-wrap" @wheel.prevent="onWheel" @mousedown="onPointerDown" @mousemove="onPointerMove" @mouseup="onPointerUp" @mouseleave="onPointerUp" @click="onCanvasClick" @touchstart="onTouchStart" @touchmove.prevent="onTouchMove" @touchend="onTouchEnd" @touchcancel="onTouchEnd">
           <canvas ref="canvas2d"></canvas>
         </div>
         <div v-else class="attach__wrap">
@@ -144,6 +144,57 @@ const onPointerMove = (e) => {
   view.lastY = e.clientY
 }
 const onPointerUp = () => { view.dragging = false }
+
+const pinch = reactive({ active: false, startDist: 0, startScale: 0, cx: 0, cy: 0 })
+
+const onTouchStart = (e) => {
+  if (e.touches.length === 1) {
+    const t = e.touches[0]
+    view.dragging = true
+    view.lastX = t.clientX
+    view.lastY = t.clientY
+  } else if (e.touches.length >= 2) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const t0 = e.touches[0]
+    const t1 = e.touches[1]
+    const dx = t1.clientX - t0.clientX
+    const dy = t1.clientY - t0.clientY
+    pinch.active = true
+    pinch.startDist = Math.hypot(dx, dy)
+    pinch.startScale = view.scale
+    pinch.cx = ((t0.clientX + t1.clientX) / 2) - rect.left
+    pinch.cy = ((t0.clientY + t1.clientY) / 2) - rect.top
+  }
+}
+
+const onTouchMove = (e) => {
+  if (pinch.active && e.touches.length >= 2) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const t0 = e.touches[0]
+    const t1 = e.touches[1]
+    const dx = t1.clientX - t0.clientX
+    const dy = t1.clientY - t0.clientY
+    const factor = pinch.startDist ? Math.max(0.5, Math.min(2, Math.hypot(dx, dy) / pinch.startDist)) : 1
+    const before = screenToWorld(pinch.cx, pinch.cy)
+    view.scale = Math.min(180, Math.max(20, pinch.startScale * factor))
+    const after = screenToWorld(pinch.cx, pinch.cy)
+    view.x += (before.x - after.x) * view.scale
+    view.y += (before.y - after.y) * view.scale
+  } else if (view.dragging && e.touches.length === 1) {
+    const t = e.touches[0]
+    const dx = t.clientX - view.lastX
+    const dy = t.clientY - view.lastY
+    view.x += dx
+    view.y += dy
+    view.lastX = t.clientX
+    view.lastY = t.clientY
+  }
+}
+
+const onTouchEnd = () => {
+  if (pinch.active) pinch.active = false
+  view.dragging = false
+}
 
 const nearestWall = (pt) => {
   let best = null
@@ -287,7 +338,7 @@ onMounted(() => { draw() })
 .constructor__header-actions { display: flex; gap: 12px; }
 .constructor__grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; max-width: 100%; }
 .constructor__panel { border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; background: #141829; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
-.constructor__toolbar { position: sticky; top: 0; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: rgba(20,24,41,0.85); backdrop-filter: blur(6px); z-index: 2; }
+.constructor__toolbar { position: sticky; top: 0; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: rgba(20,24,41,0.85); backdrop-filter: blur(6px); z-index: 2; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .constructor__spacer { flex: 1; }
 .constructor__canvas-wrap { position: relative; height: clamp(340px, 55vh, 520px); padding: 8px; }
 .constructor__canvas-wrap canvas { width: 100%; height: 100%; display: block; }
@@ -305,9 +356,10 @@ onMounted(() => { draw() })
 .attach__item { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.04); }
 .attach__meta { display: grid; }
 @media (max-width: 1024px) { .constructor__grid { grid-template-columns: 1fr; } }
-@media (max-width: 768px) { .constructor { margin: 24px auto 64px; max-width: 780px; } .constructor__header { border-radius: 20px; padding: 20px; } .constructor__panel { border-radius: 16px; } }
-@media (max-width: 480px) { .constructor__toolbar { gap: 6px; } }
+@media (max-width: 768px) { .constructor { margin: 24px auto 64px; max-width: 780px; } .constructor__header { border-radius: 20px; padding: 20px; flex-direction: column; gap: 12px; } .constructor__panel { border-radius: 16px; } .constructor__canvas-wrap, .unity__host { height: clamp(280px, 45vh, 420px); } }
+@media (max-width: 480px) { .constructor__toolbar { gap: 6px; } .constructor__canvas-wrap, .unity__host { height: clamp(240px, 45vh, 360px); } }
 
 :deep(.chip) { padding: 8px 14px; font-size: 13px; }
 :deep(.btn) { font-size: 14px; }
+@media (max-width: 480px) { :deep(.chip) { padding: 6px 10px; font-size: 12px; } }
 </style>
