@@ -15,6 +15,7 @@ type User{
 type Query {
   getUser(id: ID!): User
   getUserProject(project_id: ID! , user_id: ID!): PlanningProject!
+  getUserProjects(user_id: ID!): [PlanningProject!]!
 
 }
 

@@ -240,10 +240,36 @@ func (r *queryResolver) GetUser(ctx context.Context, id string) (*model.User, er
 
 	return user_graphql, nil
 }
-
-// GetUserProject is the resolver for the getUserProject field.
 func (r *queryResolver) GetUserProject(ctx context.Context, projectID string, userID string) (*model.PlanningProject, error) {
-	panic(fmt.Errorf("not implemented: GetUserProject - getUserProject"))
+	var project models.PlanningProject
+
+	pid, _ := strconv.ParseInt(projectID, 10, 64)
+	uid, _ := strconv.ParseInt(userID, 10, 64)
+
+	if err := r.DB.Where("id = ? AND user_id = ?", pid, uid).First(&project).Error; err != nil {
+		return nil, fmt.Errorf("проект не найден или доступ запрещен")
+	}
+
+	return ConvertDbProjectToGraph(&project), nil
+}
+func (r *queryResolver) GetUserProjects(ctx context.Context, userID string) ([]*model.PlanningProject, error) {
+	var dbProjects []models.PlanningProject
+
+	var uid int64
+	if _, err := fmt.Sscanf(userID, "%d", &uid); err != nil {
+		return nil, fmt.Errorf("неверный формат ID пользователя")
+	}
+	if err := r.DB.Where("user_id = ?", uid).Order("created_at DESC").Find(&dbProjects).Error; err != nil {
+		return nil, fmt.Errorf("ошибка при поиске проектов: %w", err)
+	}
+
+	// Конвертируем в GraphQL модели
+	var graphQLProjects []*model.PlanningProject
+	for i := range dbProjects {
+		graphQLProjects = append(graphQLProjects, ConvertDbProjectToGraph(&dbProjects[i]))
+	}
+
+	return graphQLProjects, nil
 }
 
 // Mutation returns MutationResolver implementation.
