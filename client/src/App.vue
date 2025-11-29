@@ -1,36 +1,3 @@
-const USER_ID_STORAGE_KEY = 'homeplanner3d:userId';
-
-const saveUserId = (id) => {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage && id) {
-      window.localStorage.setItem(USER_ID_STORAGE_KEY, String(id));
-    }
-  } catch {
-    // ignore storage issues
-  }
-};
-
-const getStoredUserId = () => {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return window.localStorage.getItem(USER_ID_STORAGE_KEY);
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-};
-
-const clearStoredUserId = () => {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem(USER_ID_STORAGE_KEY);
-    }
-  } catch {
-    // ignore
-  }
-};
-
 <template>
   <div class="page">
     <header v-if="!isAccountPage" class="hero">
@@ -586,8 +553,40 @@ const clearStoredUserId = () => {
 
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
-import { graphqlRequest, CREATE_PLANNING_PROJECT_MUTATION } from './utils/graphqlClient.js';
+import { graphqlRequest, ASK_BTI_AGENT_MUTATION } from './utils/graphqlClient.js';
 import AccountPage from './pages/AccountPage.vue';
+
+// API включено по умолчанию, задайте VITE_ENABLE_PROJECT_API=false чтобы отключить
+const projectApiEnabled =
+  (import.meta.env.VITE_ENABLE_PROJECT_API ?? 'true').toLowerCase() !== 'false';
+
+const sanitizePayloadForPrompt = (payload) => {
+  try {
+    const clone = JSON.parse(JSON.stringify(payload));
+    if (clone.plan?.file?.content) {
+      const contentLength = clone.plan.file.content.length;
+      clone.plan.file.content = `[base64 content omitted: ${contentLength} chars]`;
+    }
+    return clone;
+  } catch {
+    return payload;
+  }
+};
+
+const buildBtiPrompt = (payload) => {
+  const header = [
+    'Задача: проанализировать данные перепланировки из HomePlanner3D.',
+    'Дай рекомендации и проверку норм. Ниже структура в JSON.',
+  ].join('\n');
+  const sanitized = sanitizePayloadForPrompt(payload);
+  let prompt = `${header}\n\`\`\`json\n${JSON.stringify(sanitized, null, 2)}\n\`\`\``;
+  if (prompt.length > MAX_BTI_PROMPT_LENGTH) {
+    prompt =
+      `${prompt.slice(0, MAX_BTI_PROMPT_LENGTH - 60)}\n` +
+      '[...payload truncated to satisfy BTI prompt limit...]';
+  }
+  return prompt;
+};
  
 // Ленивая загрузка распознавателя (чтобы не блокировать загрузку страницы)
 let planRecognizer = null;
@@ -701,7 +700,7 @@ const authForm = reactive({
 });
 
 const handleAccountButtonClick = () => {
-  isAccountPage.value = true;
+    isAccountPage.value = true;
   if (currentUser.value) {
     isAuthModalOpen.value = false;
   } else {
@@ -817,12 +816,12 @@ const handleGenerate = () => {
 const REGISTER_MUTATION = `
   mutation Register($input: RegisterInput!) {
     register(input: $input) {
-      id
+        id
       email
-      login
-      username
-      birthday
-    }
+        login
+        username
+        birthday
+      }
   }
 `;
 
@@ -839,6 +838,7 @@ const GET_USER_QUERY = `
 `;
 
 const USER_ID_STORAGE_KEY = 'homeplanner3d:userId';
+const MAX_BTI_PROMPT_LENGTH = Number(import.meta.env.VITE_BTI_PROMPT_LIMIT || 500000);
 
 const saveUserId = (id) => {
   try {
@@ -871,6 +871,18 @@ const clearStoredUserId = () => {
   }
 };
 
+const getActiveUserId = () => {
+  return currentUser.value?.id || getStoredUserId();
+};
+
+const normalizeUser = (user, fallbackId) => {
+  if (!user) return null;
+  return {
+    ...user,
+    id: user.id || (fallbackId ? String(fallbackId) : undefined),
+  };
+};
+
 const fetchCurrentUser = async () => {
   const storedId = getStoredUserId();
   if (!storedId) {
@@ -881,7 +893,9 @@ const fetchCurrentUser = async () => {
   try {
     const data = await graphqlRequest(GET_USER_QUERY, { id: storedId });
     if (data && data.getUser) {
-      currentUser.value = data.getUser;
+      const normalized = normalizeUser(data.getUser, storedId);
+      currentUser.value = normalized;
+      if (normalized?.id) saveUserId(normalized.id);
     } else {
       currentUser.value = null;
     }
@@ -897,11 +911,11 @@ const handleAuthSubmit = async () => {
 
   try {
     if (authMode.value === 'register') {
-      const input = {
+  const input = {
         email: authForm.email,
-        login: authForm.login,
+    login: authForm.login,
         username: authForm.username || null,
-        password: authForm.password,
+    password: authForm.password,
         birthday: authForm.birthday || null,
       };
 
@@ -913,8 +927,9 @@ const handleAuthSubmit = async () => {
         return;
       }
 
-      currentUser.value = userData;
-      saveUserId(userData.id);
+      const normalized = normalizeUser(userData, authForm.login);
+      currentUser.value = normalized;
+      if (normalized?.id) saveUserId(normalized.id);
     } else {
       if (!authForm.login) {
         authError.value = 'Укажите ID пользователя для входа.';
@@ -926,11 +941,12 @@ const handleAuthSubmit = async () => {
 
       if (!userData) {
         authError.value = 'Пользователь не найден.';
-        return;
-      }
+      return;
+    }
 
-      currentUser.value = userData;
-      saveUserId(userData.id);
+      const normalized = normalizeUser(userData, authForm.login);
+      currentUser.value = normalized;
+      if (normalized?.id) saveUserId(normalized.id);
     }
   } catch (error) {
     console.error('Ошибка аутентификации:', error);
@@ -960,66 +976,26 @@ const formatBirthday = (value) => {
  * Отправляет данные проекта на бэкенд через GraphQL
  */
 const sendToApi = async (payload) => {
+  if (!projectApiEnabled) {
+    console.info('BTI-agent API отключён (VITE_ENABLE_PROJECT_API=false).');
+    return { ok: false, unavailable: true };
+  }
+
   try {
-    // Подготавливаем данные для GraphQL
+    const prompt = buildBtiPrompt(payload);
+    const userId = Number(getActiveUserId());
+    if (!Number.isFinite(userId)) {
+      throw new Error('Некорректный ID пользователя для BTI-агента.');
+    }
     const input = {
-      plan: {
-        address: payload.plan.address || null,
-        area: payload.plan.area,
-        source: payload.plan.source,
-        layoutType: payload.plan.layoutType,
-        familyProfile: payload.plan.familyProfile,
-        goal: payload.plan.goal || null,
-        prompt: payload.plan.prompt || null,
-        ceilingHeight: payload.plan.ceilingHeight,
-        floorDelta: payload.plan.floorDelta || 0,
-        recognitionStatus: payload.plan.recognitionStatus,
-        file: payload.plan.file ? {
-          name: payload.plan.file.name,
-          size: payload.plan.file.size,
-          type: payload.plan.file.type,
-          content: payload.plan.file.content, // base64 строка
-        } : null,
-      },
-      geometry: {
-        rooms: payload.geometry.rooms.map(room => ({
-          id: room.id,
-          name: room.name,
-          height: room.height,
-          vertices: room.vertices.map(v => ({
-            x: v.x,
-            y: v.y,
-          })),
-        })),
-      },
-      walls: payload.walls.map(wall => ({
-        id: wall.id,
-        start: {
-          x: wall.start.x,
-          y: wall.start.y,
-        },
-        end: {
-          x: wall.end.x,
-          y: wall.end.y,
-        },
-        loadBearing: wall.loadBearing,
-        thickness: wall.thickness,
-      })),
-      constraints: {
-        forbiddenMoves: payload.constraints.forbiddenMoves,
-        regionRules: payload.constraints.regionRules || null,
-      },
-      timestamp: payload.timestamp,
+      id: userId,
+      prompt,
     };
-
-    // Отправляем GraphQL запрос
-    const result = await graphqlRequest(CREATE_PLANNING_PROJECT_MUTATION, {
-      input,
-    });
-
+    console.debug('Отправляем askBTIagent:', { ...input, promptPreview: prompt.slice(0, 120) });
+    const result = await graphqlRequest(ASK_BTI_AGENT_MUTATION, { input });
     return {
       ok: true,
-      data: result.createPlanningProject,
+      data: result.askBTIagent,
     };
   } catch (error) {
     console.error('Ошибка отправки данных на сервер:', error);
@@ -1157,6 +1133,16 @@ const downloadJson = () => {
 
 const handleSubmit = async () => {
   submitStatus.value = '';
+
+  const activeUserId = getActiveUserId();
+  if (!activeUserId) {
+    submitStatus.value = 'Чтобы отправить данные, войдите в аккаунт.';
+    isAuthModalOpen.value = true;
+    setTimeout(() => {
+      submitStatus.value = '';
+    }, 4000);
+    return;
+  }
   handleGenerate();
   if (!generatedJson.value) {
     submitStatus.value = 'Ошибка: не удалось сформировать данные для отправки.';
@@ -1179,23 +1165,19 @@ const handleSubmit = async () => {
   try {
     const response = await sendToApi(payload);
     
+    if (response.unavailable) {
+      submitStatus.value = 'API временно недоступно.';
+      return;
+    }
+
     if (response.ok && response.data) {
-      submitStatus.value = 'Данные успешно отправлены! Мы готовим визуализацию и проверяем нормы.';
-      
-      // Сохраняем ID проекта для дальнейшего использования
-      if (response.data.id) {
-        console.log('Проект создан с ID:', response.data.id);
-        // Можно сохранить в localStorage или state для дальнейшей работы
-      }
-      
-      // Опционально: скачиваем JSON как резервную копию
-      downloadJson();
+      submitStatus.value = 'Данные отправлены в BTI-агент.';
     } else {
-      submitStatus.value = 'Не удалось отправить данные. Попробуйте ещё раз.';
+      submitStatus.value = 'Не удалось подтвердить отправку.';
     }
   } catch (error) {
     console.error('Ошибка отправки:', error);
-    submitStatus.value = `Ошибка при связи с API: ${error.message || 'Неизвестная ошибка'}`;
+    submitStatus.value = 'Произошла ошибка при связи с API.';
   } finally {
     isSubmitting.value = false;
   }

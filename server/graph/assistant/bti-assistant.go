@@ -65,7 +65,7 @@ func AskAgent(userQuestion string) (string, error) {
 }
 
 func sendToYandexAI(request YandexAIRequest) (string, error) {
-	iamToken := ""
+	iamToken := "AQVNz9lGnH1iOytu7Nu2XfHYXDhsZOrwepr5x56k"
 
 	if iamToken == "" {
 		return "", fmt.Errorf("Api key not found")

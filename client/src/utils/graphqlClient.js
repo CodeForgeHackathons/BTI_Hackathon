@@ -45,12 +45,7 @@ export async function graphqlRequest(query, variables = {}) {
     };
     
     // Логируем для отладки (можно убрать в продакшене)
-    console.log('GraphQL запрос:', {
-      endpoint: GRAPHQL_ENDPOINT,
-      method: 'POST',
-      headers,
-      body: requestBody
-    });
+    // console.debug('GraphQL запрос:', { endpoint: GRAPHQL_ENDPOINT, body: requestBody });
     
     // Отправляем запрос в стандартном GraphQL формате: { query, variables }
     const response = await fetch(GRAPHQL_ENDPOINT, {
@@ -59,12 +54,12 @@ export async function graphqlRequest(query, variables = {}) {
       body: JSON.stringify(requestBody),
     });
     
-    console.log('GraphQL ответ:', {
-      status: response.status,
-      statusText: response.statusText,
-      contentType: response.headers.get('content-type'),
-      ok: response.ok
-    });
+    // console.debug('GraphQL ответ:', {
+    //   status: response.status,
+    //   statusText: response.statusText,
+    //   contentType: response.headers.get('content-type'),
+    //   ok: response.ok
+    // });
 
     // Проверяем Content-Type перед чтением ответа
     const contentType = response.headers.get('content-type') || '';
@@ -251,6 +246,15 @@ export const CREATE_PLANNING_PROJECT_MUTATION = `
         regionRules
       }
     }
+  }
+`;
+
+/**
+ * Запрос к BTI агенту (передаём данные проекта текстом)
+ */
+export const ASK_BTI_AGENT_MUTATION = `
+  mutation AskBTIAgent($input: BTI_agent!) {
+    askBTIagent(input: $input)
   }
 `;
 
