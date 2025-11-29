@@ -439,8 +439,107 @@ const draw = () => {
   requestAnimationFrame(draw)
 }
 
-const attachUnity = () => { unityConnected.value = true }
-const sendGeometryToUnity = () => {}
+// Функция для преобразования данных в формат для Unity
+const prepareUnityData = () => {
+  if (!attachedProject.value) return null
+
+  // Собираем все уникальные точки из стен
+  const allPoints = []
+  const pointMap = new Map()
+
+  walls.value.forEach(wall => {
+    const startKey = `${wall.start.x},${wall.start.y}`
+    const endKey = `${wall.end.x},${wall.end.y}`
+
+    if (!pointMap.has(startKey)) {
+      pointMap.set(startKey, allPoints.length)
+      allPoints.push({ x: wall.start.x, y: wall.start.y })
+    }
+
+    if (!pointMap.has(endKey)) {
+      pointMap.set(endKey, allPoints.length)
+      allPoints.push({ x: wall.end.x, y: wall.end.y })
+    }
+  })
+
+  // Создаем connections (индексы точек)
+  const connections = []
+  walls.value.forEach(wall => {
+    const startKey = `${wall.start.x},${wall.start.y}`
+    const endKey = `${wall.end.x},${wall.end.y}`
+
+    const startIndex = pointMap.get(startKey)
+    const endIndex = pointMap.get(endKey)
+
+    connections.push(startIndex, endIndex)
+  })
+
+  // Высота стен (по умолчанию 2.5м)
+  const wallHeights = walls.value.map(() => 2.5)
+
+  // Толщина стен из данных
+  const wallThicknesses = walls.value.map(wall => wall.thickness || 0.2)
+
+  // Окна и двери (пока пустые массивы, можно расширить функционал)
+  const windows = []
+  const doors = []
+
+  const unityData = {
+    points: allPoints,
+    connections: connections,
+    wallHeights: wallHeights,
+    wallThicknesses: wallThicknesses,
+    windows: windows,
+    doors: doors
+  }
+
+  console.log('[Unity] Prepared data for Unity:', unityData)
+  return unityData
+}
+
+// Функция отправки данных в Unity
+const sendDataToUnity = () => {
+  if (typeof window === 'undefined' || !window.SendMessage) {
+    console.warn('[Unity] SendMessage not available - Unity not loaded or not in WebGL build')
+    return false
+  }
+
+  const unityData = prepareUnityData()
+  if (!unityData) {
+    console.warn('[Unity] No data to send to Unity')
+    return false
+  }
+
+  try {
+    // Отправляем данные в Unity
+    window.SendMessage('SceneController', 'LoadLayoutData', JSON.stringify(unityData))
+    console.log('[Unity] Data sent to Unity successfully')
+    return true
+  } catch (error) {
+    console.error('[Unity] Error sending data to Unity:', error)
+    return false
+  }
+}
+
+const attachUnity = () => {
+  unityConnected.value = true
+  // Автоматически отправляем данные при подключении Unity
+  setTimeout(() => {
+    sendDataToUnity()
+  }, 1000)
+}
+
+const sendGeometryToUnity = () => {
+  if (!unityConnected.value) {
+    console.warn('[Unity] Unity not connected')
+    return
+  }
+
+  const success = sendDataToUnity()
+  if (success) {
+    console.log('[Unity] Geometry updated in Unity scene')
+  }
+}
 
 const GET_USER_PROJECTS_QUERY = `
   query GetUserProjects($user_id: ID!) {
@@ -516,7 +615,7 @@ const isAttachable = (p) => isAttachableStatus(p?.status)
 const mergeCloseVertices = (vertices, threshold = 0.01) => {
   const result = []
   for (const v of vertices) {
-    const existing = result.find(r => 
+    const existing = result.find(r =>
       Math.abs(r.x - v.x) < threshold && Math.abs(r.y - v.y) < threshold
     )
     if (!existing) {
@@ -529,30 +628,30 @@ const mergeCloseVertices = (vertices, threshold = 0.01) => {
 // Нормализует тип стены и синхронизирует с loadBearing
 const normalizeWall = (wall) => {
   if (!wall) return null
-  
+
   let normalizedType = String(wall.wallType || '').toLowerCase().trim()
-  
+
   // Более точное определение типа стены из существующих данных
-  const isLoadBearingFromType = normalizedType.includes('несущ') || 
+  const isLoadBearingFromType = normalizedType.includes('несущ') ||
                                normalizedType.includes('bearing') ||
                                normalizedType === 'loadbearing' ||
                                normalizedType === 'несущая'
-  
+
   // Определяем толщину на основе типа
   const thickness = wall.thickness || (isLoadBearingFromType ? 0.2 : 0.12)
-  
+
   // Приоритет: явное значение > значение из типа > по умолчанию перегородка
-  const loadBearing = wall.loadBearing !== undefined 
-    ? Boolean(wall.loadBearing) 
+  const loadBearing = wall.loadBearing !== undefined
+    ? Boolean(wall.loadBearing)
     : isLoadBearingFromType
-  
+
   // Нормализуем wallType на основе loadBearing
   if (loadBearing) {
     normalizedType = 'несущая'
   } else {
     normalizedType = 'перегородка'
   }
-  
+
   return {
     ...wall,
     loadBearing,
@@ -565,35 +664,35 @@ const normalizeWall = (wall) => {
 const buildWallsFromGeometry = (geom) => {
   const out = []
   if (!geom || !Array.isArray(geom.rooms)) return out
-  
+
   // Собираем все сегменты стен из всех комнат
   const allSegments = []
-  
+
   for (const room of geom.rooms) {
     const verts = Array.isArray(room.vertices) ? room.vertices : []
     const mergedVerts = mergeCloseVertices(verts)
-    
+
     for (let i = 0; i < mergedVerts.length; i++) {
       const a = mergedVerts[i]
       const b = mergedVerts[(i + 1) % mergedVerts.length]
-      
+
       // Создаем сегмент с нормализованными координатами (всегда от меньшей к большей)
       const segment = {
         start: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) },
         end: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) },
         roomId: room.id
       }
-      
+
       allSegments.push(segment)
     }
   }
-  
+
   // Группируем сегменты по координатам для нахождения общих стен
   const segmentMap = new Map()
-  
+
   for (const segment of allSegments) {
     const key = `${segment.start.x},${segment.start.y}-${segment.end.x},${segment.end.y}`
-    
+
     if (!segmentMap.has(key)) {
       segmentMap.set(key, {
         segment,
@@ -606,17 +705,17 @@ const buildWallsFromGeometry = (geom) => {
       existing.rooms.add(segment.roomId)
     }
   }
-  
+
   // Создаем стены на основе сегментов
   let wallId = 1
   for (const [key, data] of segmentMap.entries()) {
     const { segment, count, rooms } = data
-    
+
     // Если сегмент встречается только в одной комнате - это внешняя стена (несущая)
     // Если в двух и более комнатах - это внутренняя стена (перегородка)
     const isExternal = count === 1
     const isLoadBearing = isExternal
-    
+
     out.push({
       id: `GW${wallId++}`,
       start: segment.start,
@@ -627,7 +726,7 @@ const buildWallsFromGeometry = (geom) => {
       rooms: Array.from(rooms)
     })
   }
-  
+
   console.log(`[Geometry] Built ${out.length} walls from ${allSegments.length} segments (${out.filter(w => w.loadBearing).length} load-bearing)`)
   return out
 }
@@ -638,17 +737,17 @@ const attachSelected = () => {
     console.warn('[Constructor] Project not attachable:', p?.id, p?.status)
     return
   }
-  
+
   console.log('[Constructor] Attaching project:', p.id, 'walls:', p.walls?.length, 'rooms:', p.geometry?.rooms?.length)
-  
+
   attachedProject.value = p
   geometry.value = p.geometry || { rooms: [] }
   const initialWalls = Array.isArray(p.walls) ? p.walls : []
-  
+
   if (initialWalls.length) {
     // Нормализуем существующие стены
     walls.value = initialWalls.map(normalizeWall).filter(w => w !== null)
-    console.log('[Constructor] Normalized walls:', walls.value.length, 
+    console.log('[Constructor] Normalized walls:', walls.value.length,
                 'loadBearing:', walls.value.filter(w => w.loadBearing).length,
                 'partitions:', walls.value.filter(w => !w.loadBearing).length)
   } else {
@@ -658,10 +757,10 @@ const attachSelected = () => {
                 'loadBearing:', walls.value.filter(w => w.loadBearing).length,
                 'partitions:', walls.value.filter(w => !w.loadBearing).length)
   }
-  
+
   isSelecting.value = false
   selectedProjectId.value = null
-  
+
   // Убеждаемся, что канвас перерисуется
   setTimeout(() => {
     fitViewToProject()
@@ -669,13 +768,27 @@ const attachSelected = () => {
     if (canvas2d.value) {
       draw()
     }
+
+    // Автоматически отправляем данные в Unity если подключен
+    if (unityConnected.value) {
+      setTimeout(() => {
+        sendDataToUnity()
+      }, 500)
+    }
   }, 100)
 }
 
 const cancelSelecting = () => { isSelecting.value = false; selectedProjectId.value = null }
 const changeAttachment = () => { attachedProject.value = null; isSelecting.value = false; selectedProjectId.value = null }
 
-watch([geometry, walls], () => { if (unityConnected.value) sendGeometryToUnity() })
+watch([geometry, walls], () => {
+  if (unityConnected.value) {
+    // Автоматически обновляем Unity при изменении геометрии
+    setTimeout(() => {
+      sendDataToUnity()
+    }, 300)
+  }
+})
 
 // Отслеживаем изменения attachedProject для перерисовки
 watch(attachedProject, (newVal) => {
