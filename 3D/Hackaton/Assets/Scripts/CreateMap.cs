@@ -469,6 +469,9 @@ public class SimpleMapGenerator : MonoBehaviour
         floor.name = "Floor";
         floor.transform.parent = this.transform;
 
+        // ДОБАВЛЯЕМ ТЕГ
+        floor.tag = "Floor";
+
         // Вычисляем границы для пола
         Vector2 min = GetMinBounds();
         Vector2 max = GetMaxBounds();
@@ -505,6 +508,10 @@ public class SimpleMapGenerator : MonoBehaviour
         ceiling.name = "Ceiling";
         ceiling.transform.parent = this.transform;
 
+        // ДОБАВЛЯЕМ ТЕГ (ОПЦИОНАЛЬНО)
+        ceiling.tag = "Ceiling"; // или "Floor", в зависимости от ваших потребностей
+
+        // Остальной код без изменений...
         // Вычисляем границы для потолка
         Vector2 min = GetMinBounds();
         Vector2 max = GetMaxBounds();

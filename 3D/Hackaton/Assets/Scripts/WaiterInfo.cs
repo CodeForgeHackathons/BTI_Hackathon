@@ -1,191 +1,27 @@
-using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.Networking;
-using System;
-
-[System.Serializable]
-public class MapDataResponse
-{
-    public Vector2[] points;
-    public int[] connections;
-    public float[] wallHeights;
-    public float[] wallThicknesses;
-    public WindowData[] windows;
-    public DoorData[] doors;
-}
-
-[System.Serializable]
-public class WindowData
-{
-    public Vector2[] points;
-    public int[] connections;
-    public float height;
-    public int wallIndex;
-}
-
-[System.Serializable]
-public class DoorData
-{
-    public Vector2[] points;
-    public int[] connections;
-    public float height;
-    public int wallIndex;
-}
+using UnityEngine;
 
 public class TestMap : MonoBehaviour
 {
     public SimpleMapGenerator mapGenerator;
 
-    [Header("Настройки материалов")]
+    [Header("РќР°СЃС‚СЂРѕР№РєРё РјР°С‚РµСЂРёР°Р»РѕРІ")]
     public Material windowMaterial;
     public Material doorMaterial;
 
-    [Header("Настройки автоматической ширины")]
+    [Header("РќР°СЃС‚СЂРѕР№РєРё Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРѕР№ С€РёСЂРёРЅС‹")]
     public float windowWidthOffset = 0.01f;
     public float doorWidthOffset = 0.01f;
 
-    [Header("API Settings")]
-    public string apiUrl = "http://localhost:3000/api/map-data";
-    public float requestTimeout = 10f;
-
     void Start()
     {
-        StartCoroutine(LoadMapDataFromServer());
-    }
-
-    IEnumerator LoadMapDataFromServer()
-    {
-        using (UnityWebRequest request = UnityWebRequest.Get(apiUrl))
-        {
-            request.timeout = (int)requestTimeout;
-
-            Debug.Log($"Загрузка данных карты с сервера: {apiUrl}");
-
-            yield return request.SendWebRequest();
-
-            if (request.result == UnityWebRequest.Result.Success)
-            {
-                try
-                {
-                    string jsonResponse = request.downloadHandler.text;
-                    Debug.Log($"Получены данные: {jsonResponse}");
-
-                    MapDataResponse mapData = JsonUtility.FromJson<MapDataResponse>(jsonResponse);
-                    ProcessMapData(mapData);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Ошибка парсинга JSON: {e.Message}");
-                    // Используем тестовые данные при ошибке
-                    UseTestData();
-                }
-            }
-            else
-            {
-                Debug.LogError($"Ошибка загрузки данных: {request.error}");
-                // Используем тестовые данные при ошибке сети
-                UseTestData();
-            }
-        }
-    }
-
-    void ProcessMapData(MapDataResponse mapData)
-    {
-        if (mapData == null)
-        {
-            Debug.LogError("Получены пустые данные");
-            UseTestData();
-            return;
-        }
-
-        // Проверяем обязательные поля
-        if (mapData.points == null || mapData.connections == null)
-        {
-            Debug.LogError("Отсутствуют обязательные данные (points или connections)");
-            UseTestData();
-            return;
-        }
-
-        // Устанавливаем данные в генератор
-        mapGenerator.SetPoints(mapData.points);
-        mapGenerator.SetConnections(mapData.connections);
-
-        // Устанавливаем размеры стен (если предоставлены)
-        if (mapData.wallHeights != null && mapData.wallThicknesses != null)
-        {
-            mapGenerator.SetWallDimensions(mapData.wallHeights, mapData.wallThicknesses);
-        }
-
-        // Устанавливаем окна (если предоставлены)
-        if (mapData.windows != null && mapData.windows.Length > 0)
-        {
-            SimpleMapGenerator.WindowData[] windows = ConvertWindowData(mapData.windows);
-            mapGenerator.SetWindows(windows);
-        }
-
-        // Устанавливаем двери (если предоставлены)
-        if (mapData.doors != null && mapData.doors.Length > 0)
-        {
-            SimpleMapGenerator.DoorData[] doors = ConvertDoorData(mapData.doors);
-            mapGenerator.SetDoors(doors);
-        }
-
-        mapGenerator.SetWindowWidthOffset(windowWidthOffset);
-        mapGenerator.SetDoorWidthOffset(doorWidthOffset);
-        mapGenerator.doorLayerMask = LayerMask.GetMask("Doors");
-
-        mapGenerator.GenerateMap();
-        AssignDoorLayers();
-
-        Debug.Log("Карта успешно сгенерирована из данных сервера");
-    }
-
-    SimpleMapGenerator.WindowData[] ConvertWindowData(WindowData[] serverWindows)
-    {
-        SimpleMapGenerator.WindowData[] windows = new SimpleMapGenerator.WindowData[serverWindows.Length];
-
-        for (int i = 0; i < serverWindows.Length; i++)
-        {
-            windows[i] = new SimpleMapGenerator.WindowData
-            {
-                points = serverWindows[i].points,
-                connections = serverWindows[i].connections,
-                height = serverWindows[i].height,
-                wallIndex = serverWindows[i].wallIndex
-            };
-        }
-
-        return windows;
-    }
-
-    SimpleMapGenerator.DoorData[] ConvertDoorData(DoorData[] serverDoors)
-    {
-        SimpleMapGenerator.DoorData[] doors = new SimpleMapGenerator.DoorData[serverDoors.Length];
-
-        for (int i = 0; i < serverDoors.Length; i++)
-        {
-            doors[i] = new SimpleMapGenerator.DoorData
-            {
-                points = serverDoors[i].points,
-                connections = serverDoors[i].connections,
-                height = serverDoors[i].height,
-                wallIndex = serverDoors[i].wallIndex
-            };
-        }
-
-        return doors;
-    }
-
-    void UseTestData()
-    {
-        Debug.Log("Используются тестовые данные");
         TestRoomWithDoors();
     }
 
     void TestRoomWithDoors()
     {
-        // Точки для комнаты
+        // РўРѕС‡РєРё РґР»СЏ РєРѕРјРЅР°С‚С‹
         Vector2[] points = {
             new Vector2(0, 0),
             new Vector2(6, 0),
@@ -193,15 +29,15 @@ public class TestMap : MonoBehaviour
             new Vector2(0, 4)
         };
 
-        // Соединения: стены между точками
+        // РЎРѕРµРґРёРЅРµРЅРёСЏ: СЃС‚РµРЅС‹ РјРµР¶РґСѓ С‚РѕС‡РєР°РјРё
         int[] connections = {
-            0, 1,  // нижняя стена
-            1, 2,  // правая стена
-            2, 3,  // верхняя стена
-            3, 0   // левая стена
+            0, 1,  // РЅРёР¶РЅСЏСЏ СЃС‚РµРЅР°
+            1, 2,  // РїСЂР°РІР°СЏ СЃС‚РµРЅР°
+            2, 3,  // РІРµСЂС…РЅСЏСЏ СЃС‚РµРЅР°
+            3, 0   // Р»РµРІР°СЏ СЃС‚РµРЅР°
         };
 
-        // Высота для каждой стены
+        // Р’С‹СЃРѕС‚Р° РґР»СЏ РєР°Р¶РґРѕР№ СЃС‚РµРЅС‹
         float[] wallHeights = {
             2.5f,
             2.5f,
@@ -209,7 +45,7 @@ public class TestMap : MonoBehaviour
             2.5f
         };
 
-        // Толщина для каждой стены
+        // РўРѕР»С‰РёРЅР° РґР»СЏ РєР°Р¶РґРѕР№ СЃС‚РµРЅС‹
         float[] wallThicknesses = {
             0.2f,
             0.2f,
@@ -217,7 +53,7 @@ public class TestMap : MonoBehaviour
             0.2f
         };
 
-        // Создаем окна
+        // РЎРѕР·РґР°РµРј РѕРєРЅР°
         SimpleMapGenerator.WindowData[] windows = new SimpleMapGenerator.WindowData[1];
         windows[0] = new SimpleMapGenerator.WindowData
         {
@@ -230,7 +66,7 @@ public class TestMap : MonoBehaviour
             wallIndex = 1
         };
 
-        // Создаем двери
+        // РЎРѕР·РґР°РµРј РґРІРµСЂРё
         SimpleMapGenerator.DoorData[] doors = new SimpleMapGenerator.DoorData[2];
         doors[0] = new SimpleMapGenerator.DoorData
         {
@@ -260,9 +96,13 @@ public class TestMap : MonoBehaviour
         mapGenerator.SetDoors(doors);
         mapGenerator.SetWindowWidthOffset(windowWidthOffset);
         mapGenerator.SetDoorWidthOffset(doorWidthOffset);
+
+        // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃР»РѕР№ РґР»СЏ РґРІРµСЂРµР№
         mapGenerator.doorLayerMask = LayerMask.GetMask("Doors");
 
         mapGenerator.GenerateMap();
+
+        // РќР°Р·РЅР°С‡Р°РµРј СЃР»РѕР№ "Doors" РґР»СЏ РІСЃРµС… СЃРѕР·РґР°РЅРЅС‹С… РґРІРµСЂРµР№
         AssignDoorLayers();
     }
 
@@ -273,7 +113,7 @@ public class TestMap : MonoBehaviour
 
         if (doorLayer == -1)
         {
-            Debug.LogWarning("Слой 'Doors' не существует. Создайте слой 'Doors' в настройках проекта.");
+            Debug.LogWarning("РЎР»РѕР№ 'Doors' РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚. РЎРѕР·РґР°Р№С‚Рµ СЃР»РѕР№ 'Doors' РІ РЅР°СЃС‚СЂРѕР№РєР°С… РїСЂРѕРµРєС‚Р°.");
             return;
         }
 
@@ -288,36 +128,6 @@ public class TestMap : MonoBehaviour
 
     public void RegenerateMap()
     {
-        StartCoroutine(LoadMapDataFromServer());
-    }
-
-    // Метод для ручной отправки данных на сервер (если нужно)
-    public void SendMapDataToServer(MapDataResponse mapData)
-    {
-        StartCoroutine(PostMapData(mapData));
-    }
-
-    IEnumerator PostMapData(MapDataResponse mapData)
-    {
-        string jsonData = JsonUtility.ToJson(mapData);
-
-        using (UnityWebRequest request = UnityWebRequest.PostWwwForm(apiUrl, jsonData))
-        {
-            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
-            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            request.downloadHandler = new DownloadHandlerBuffer();
-            request.SetRequestHeader("Content-Type", "application/json");
-
-            yield return request.SendWebRequest();
-
-            if (request.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogError($"Ошибка отправки данных: {request.error}");
-            }
-            else
-            {
-                Debug.Log("Данные успешно отправлены на сервер");
-            }
-        }
+        mapGenerator.GenerateMap();
     }
 }

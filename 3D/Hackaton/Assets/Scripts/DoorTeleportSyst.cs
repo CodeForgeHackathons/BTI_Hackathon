@@ -4,7 +4,6 @@ using System.Collections;
 public class DoorTeleportSystem : MonoBehaviour
 {
     [Header("Настройки телепортации")]
-    public KeyCode teleportKey = KeyCode.E;
     public float maxDistance = 3f;
     public LayerMask doorLayerMask = 1;
     public float teleportCooldown = 1f;
@@ -41,7 +40,7 @@ public class DoorTeleportSystem : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(teleportKey) && canTeleport)
+        if (Input.GetKeyDown(KeyCode.F) && canTeleport)
         {
             TryTeleportThroughDoor();
         }
