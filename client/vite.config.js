@@ -29,6 +29,15 @@ export default defineConfig({
         headers: {
           'Access-Control-Allow-Origin': '*'
         }
+      },
+      // Прокси для GraphQL API на endpoint /query
+      '/query': {
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        headers: {
+          'Access-Control-Allow-Origin': '*'
+        }
       }
     }
   }

@@ -2,7 +2,7 @@
   <div class="page">
     <header class="hero">
       <div class="hero__topbar">
-        <span class="hero__logo">HomePlanner3D</span>
+        <span class="hero__logo"></span>
         <div class="hero__top-actions">
           <span v-if="currentUser" class="hero__user">
             {{ currentUser.username || currentUser.login }}
@@ -10,7 +10,7 @@
           <button
             type="button"
             class="btn btn--ghost btn--small hero__login-btn"
-            @click="isAuthModalOpen = true"
+            @click="handleAccountButtonClick"
           >
             {{ currentUser ? 'Аккаунт' : 'Войти' }}
           </button>
@@ -43,7 +43,8 @@
       </div>
     </header>
 
-    <section class="intake">
+    <template v-if="!isAccountPage">
+      <section class="intake">
       <div class="section-header">
         <h2>Шаг 1. Расскажите о квартире</h2>
         <p>
@@ -428,6 +429,59 @@
         <a href="#">Политика</a>
       </div>
     </footer>
+    </template>
+
+    <section v-else class="account-page">
+      <div class="section-header">
+        <h2>Личный кабинет</h2>
+        <p v-if="currentUser">
+          Ниже собраны все данные вашего профиля, которые нам известны на текущем этапе интеграции.
+        </p>
+        <p v-else>
+          Войдите в аккаунт, чтобы увидеть все данные вашего профиля.
+        </p>
+      </div>
+
+      <div v-if="currentUser" class="account-page__content">
+        <div class="account-page__column">
+          <h3>Профиль пользователя</h3>
+          <div class="account__card">
+            <p v-if="currentUser.id"><strong>ID пользователя:</strong> {{ currentUser.id }}</p>
+            <p><strong>Логин:</strong> {{ currentUser.login }}</p>
+            <p v-if="currentUser.username"><strong>Имя (username):</strong> {{ currentUser.username }}</p>
+            <p v-if="currentUser.email"><strong>Email:</strong> {{ currentUser.email }}</p>
+            <p v-if="currentUser.birthday">
+              <strong>Дата рождения:</strong> {{ formatBirthday(currentUser.birthday) }}
+            </p>
+          </div>
+          <p class="account-page__stub">
+            Дополнительные поля (например, связанные проекты, права доступа и т.п.) появятся,
+            когда бэкенд начнёт отдавать больше данных.
+          </p>
+        </div>
+      </div>
+
+      <div v-else class="account-page__auth-hint">
+        <p>Чтобы попасть в личный кабинет, нужно войти или зарегистрироваться.</p>
+        <button
+          type="button"
+          class="btn btn--primary btn--small"
+          @click="openAuthFromAccountPage"
+        >
+          Войти
+        </button>
+      </div>
+
+      <div class="account-page__actions">
+        <button
+          type="button"
+          class="btn btn--ghost btn--small"
+          @click="goToLanding"
+        >
+          ← На главную
+        </button>
+      </div>
+    </section>
 
     <!-- Модальное окно входа / регистрации -->
     <div v-if="isAuthModalOpen" class="modal-backdrop" @click.self="isAuthModalOpen = false">
@@ -641,6 +695,7 @@ const authMode = ref('login'); // 'login' | 'register'
 const authLoading = ref(false);
 const authError = ref('');
 const isAuthModalOpen = ref(false);
+const isAccountPage = ref(false);
 
 const authForm = reactive({
   login: '',
@@ -649,6 +704,24 @@ const authForm = reactive({
   email: '',
   birthday: '',
 });
+
+const handleAccountButtonClick = () => {
+  if (currentUser.value) {
+    isAccountPage.value = true;
+    isAuthModalOpen.value = false;
+  } else {
+    isAuthModalOpen.value = true;
+  }
+};
+
+const goToLanding = () => {
+  isAccountPage.value = false;
+};
+
+const openAuthFromAccountPage = () => {
+  isAccountPage.value = false;
+  isAuthModalOpen.value = true;
+};
 
 const parseRooms = () =>
   formData.roomsText
@@ -1374,6 +1447,62 @@ section {
 
 .hero__login-btn {
   padding-inline: 14px;
+}
+
+.account-page {
+  margin-top: 56px;
+  padding: 32px;
+  border-radius: 24px;
+  background: #111423;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.account-page__content {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.account-page__column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.account-page__stub {
+  font-size: 14px;
+  color: #9aa5c1;
+}
+
+.account-page__project-skeleton {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #151826;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+}
+
+.account-page__project-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.account-page__project-meta {
+  color: #9aa5c1;
+}
+
+.account-page__auth-hint {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #c6cad4;
+}
+
+.account-page__actions {
+  margin-top: 24px;
 }
 
 .hero__content {

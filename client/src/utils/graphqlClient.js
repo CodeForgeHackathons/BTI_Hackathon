@@ -2,13 +2,13 @@
  * GraphQL клиент для отправки запросов на бэкенд
  * 
  * Настройка endpoint:
- * - По умолчанию используется '/graphql' (проксируется через Vite)
+ * - По умолчанию используется '/query' (согласно настройкам сервера)
  * - Для изменения создайте файл .env с переменной VITE_GRAPHQL_ENDPOINT
- * - Пример: VITE_GRAPHQL_ENDPOINT=http://localhost:8080/graphql
+ * - Пример: VITE_GRAPHQL_ENDPOINT=http://localhost:8080/query
  */
  
 // URL GraphQL endpoint (можно переопределить через переменные окружения)
-const GRAPHQL_ENDPOINT = import.meta.env.VITE_GRAPHQL_ENDPOINT || '/graphql';
+const GRAPHQL_ENDPOINT = import.meta.env.VITE_GRAPHQL_ENDPOINT || '/query';
 
 /**
  * Выполняет GraphQL запрос
@@ -19,9 +19,6 @@ const GRAPHQL_ENDPOINT = import.meta.env.VITE_GRAPHQL_ENDPOINT || '/graphql';
  */
 export async function graphqlRequest(query, variables = {}) {
   try {
-    // Формируем запрос как строку с подставленными переменными
-    const queryString = buildQueryString(query, variables);
-
     // Пытаемся достать токен авторизации для ЛК (если он сохранён)
     let token = null;
     try {
@@ -41,15 +38,60 @@ export async function graphqlRequest(query, variables = {}) {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Отправляем запрос как строку (не JSON объект)
+    // Формируем тело запроса в стандартном GraphQL формате
+    const requestBody = {
+      query: query,
+      variables: variables
+    };
+    
+    // Логируем для отладки (можно убрать в продакшене)
+    console.log('GraphQL запрос:', {
+      endpoint: GRAPHQL_ENDPOINT,
+      method: 'POST',
+      headers,
+      body: requestBody
+    });
+    
+    // Отправляем запрос в стандартном GraphQL формате: { query, variables }
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers,
-      body: JSON.stringify(queryString), // Отправляем строку запроса
+      body: JSON.stringify(requestBody),
+    });
+    
+    console.log('GraphQL ответ:', {
+      status: response.status,
+      statusText: response.statusText,
+      contentType: response.headers.get('content-type'),
+      ok: response.ok
     });
 
+    // Проверяем Content-Type перед чтением ответа
+    const contentType = response.headers.get('content-type') || '';
+    const isJSON = contentType.includes('application/json');
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // Пытаемся прочитать текст ошибки
+      const errorText = await response.text();
+      throw new Error(
+        `HTTP error! status: ${response.status}. ` +
+        `Content-Type: ${contentType || 'не указан'}. ` +
+        `Ответ: ${errorText.substring(0, 200)}`
+      );
+    }
+
+    // Если сервер вернул HTML вместо JSON - это проблема конфигурации
+    if (!isJSON) {
+      const text = await response.text();
+      console.error('Сервер вернул HTML вместо JSON. Полный ответ:', text);
+      throw new Error(
+        `Сервер вернул HTML (GraphQL Playground) вместо JSON. ` +
+        `Это означает, что endpoint ${GRAPHQL_ENDPOINT} настроен неправильно. ` +
+        `Убедитесь, что: ` +
+        `1) Сервер обрабатывает POST запросы на ${GRAPHQL_ENDPOINT}, ` +
+        `2) GraphQL Playground отключён или доступен только на GET запросы, ` +
+        `3) Endpoint возвращает JSON для POST запросов с Content-Type: application/json`
+      );
     }
 
     const data = await response.json();
@@ -62,6 +104,18 @@ export async function graphqlRequest(query, variables = {}) {
     return data.data;
   } catch (error) {
     console.error('Ошибка GraphQL запроса:', error);
+    
+    // Если это ошибка парсинга JSON (сервер вернул HTML)
+    if (error instanceof SyntaxError && error.message.includes('JSON')) {
+      const friendlyError = new Error(
+        `Сервер вернул HTML вместо JSON. ` +
+        `Возможно, GraphQL endpoint (${GRAPHQL_ENDPOINT}) недоступен или сервер не запущен. ` +
+        `Проверьте настройки бэкенда.`
+      );
+      friendlyError.originalError = error;
+      throw friendlyError;
+    }
+    
     throw error;
   }
 }
