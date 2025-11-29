@@ -6,9 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HomePlanner3D - Конструктор планировки квартир</title>
 
-    <!-- Unity WebGL Loader для старых версий Unity -->
-    <script src="/Build3D/Build/Build3D.loader.js"></script>
-
     <style>
       /* Стили для Unity контейнера */
       #unityContainer {
@@ -112,8 +109,25 @@
       let unityInstance = null;
       let isUnityLoaded = false;
 
+      // Функция для проверки загрузки UnityLoader
+      function checkUnityLoader() {
+        console.log('Проверка UnityLoader...');
+        console.log('typeof UnityLoader:', typeof UnityLoader);
+        console.log('window.UnityLoader:', window.UnityLoader);
+
+        if (typeof UnityLoader !== 'undefined') {
+          console.log('UnityLoader найден!');
+          return true;
+        } else {
+          console.log('UnityLoader не найден в глобальной области');
+          return false;
+        }
+      }
+
       // Функция инициализации Unity
       function initUnity() {
+        console.log('Инициализация Unity...');
+
         // Показываем overlay загрузки
         const overlay = document.getElementById('unityOverlay');
         const progressBar = document.getElementById('unityProgress');
@@ -121,9 +135,42 @@
 
         overlay.style.display = 'flex';
 
-        // Для старых версий Unity (до 2020) используем UnityLoader
+        // Проверяем доступность UnityLoader
+        if (!checkUnityLoader()) {
+          console.error('UnityLoader не доступен. Загрузка скрипта...');
+
+          // Динамически загружаем UnityLoader
+          const script = document.createElement('script');
+          script.src = '/Build3D/Build/Build3D.loader.js';
+          script.onload = function() {
+            console.log('UnityLoader загружен динамически');
+            setTimeout(() => {
+              if (checkUnityLoader()) {
+                startUnityInitialization();
+              } else {
+                showUnityError('UnityLoader не загрузился даже после динамической загрузки');
+              }
+            }, 100);
+          };
+          script.onerror = function() {
+            showUnityError('Не удалось загрузить Build3D.loader.js');
+          };
+          document.head.appendChild(script);
+          return;
+        }
+
+        startUnityInitialization();
+      }
+
+      function startUnityInitialization() {
+        const overlay = document.getElementById('unityOverlay');
+        const progressBar = document.getElementById('unityProgress');
+        const progressText = document.getElementById('unityProgressText');
+
         if (typeof UnityLoader !== 'undefined') {
           try {
+            console.log('Запуск UnityLoader.instantiate...');
+
             unityInstance = UnityLoader.instantiate(
               "unityContainer",
               "/Build3D/Build/Build3D.json",
@@ -132,6 +179,7 @@
                   const percentage = Math.round(progress * 100);
                   progressBar.style.width = percentage + '%';
                   progressText.textContent = percentage + '%';
+                  console.log('Прогресс загрузки Unity:', percentage + '%');
 
                   if (percentage === 100) {
                     setTimeout(() => {
@@ -146,20 +194,28 @@
 
           } catch (error) {
             console.error('Ошибка инициализации Unity:', error);
-            overlay.innerHTML = `
-              <h2>Ошибка загрузки 3D</h2>
-              <p>Не удалось загрузить 3D сцену. Пожалуйста, обновите страницу.</p>
-              <button class="unity-btn" onclick="location.reload()">Обновить страницу</button>
-            `;
+            showUnityError('Не удалось инициализировать Unity: ' + error.message);
           }
         } else {
-          console.error('UnityLoader не найден. Проверьте путь к UnityLoader.js');
-          overlay.innerHTML = `
-            <h2>UnityLoader не найден</h2>
-            <p>Файлы Unity WebGL не загружены. Проверьте папку Build3D.</p>
-            <button class="unity-btn" onclick="location.reload()">Обновить страницу</button>
-          `;
+          showUnityError('UnityLoader не найден после проверки');
         }
+      }
+
+      function showUnityError(message) {
+        console.error('Unity Error:', message);
+        const overlay = document.getElementById('unityOverlay');
+        overlay.innerHTML = `
+          <h2>Ошибка загрузки 3D</h2>
+          <p>${message}</p>
+          <div style="margin: 20px 0; padding: 10px; background: #333; border-radius: 5px; font-family: monospace; font-size: 12px;">
+            Проверьте:<br>
+            1. Файлы в папке Build3D/Build/<br>
+            2. Консоль браузера для подробностей<br>
+            3. Пути к файлам Unity
+          </div>
+          <button class="unity-btn" onclick="location.reload()">Обновить страницу</button>
+          <button class="unity-btn" onclick="initUnity()" style="background: #ff6b6b;">Повторить загрузку</button>
+        `;
       }
 
       // Функция вызывается когда Unity загружен
@@ -246,12 +302,11 @@
         return false;
       };
 
-      // Автоматическая инициализация при загрузке страницы (опционально)
-      // document.addEventListener('DOMContentLoaded', function() {
-      //   // Можно автоматически запустить загрузку Unity
-      //   // или оставить для ручного запуска из Vue
-      //   // initUnity();
-      // });
+      // Проверяем доступность UnityLoader при загрузке страницы
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM загружен, проверяем UnityLoader...');
+        checkUnityLoader();
+      });
 
       console.log('Unity WebGL integration script loaded');
     </script>
