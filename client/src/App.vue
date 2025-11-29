@@ -716,7 +716,7 @@
 
 <script setup>
 import { reactive, ref, onMounted, computed } from 'vue';
-import { graphqlRequest, ASK_BTI_AGENT_MUTATION } from './utils/graphqlClient.js';
+import { graphqlRequest, CREATE_PLANNING_PROJECT_MUTATION } from './utils/graphqlClient.js';
 import AccountPage from './pages/AccountPage.vue';
 import ChatPage from './pages/ChatPage.vue';
 import beforeImageUrl from './assets/Сценарий «Семейная 70 м²»ДО.png';
@@ -864,7 +864,15 @@ const openNormsReport = async () => {
     const response = await sendToApi(payload);
     const universal = buildLocalNormsReport(payload);
     if (response?.ok && response.data) {
-      normsReportText.value = `${universal}\n\nКомментарий сервера:\n${String(response.data)}`;
+      const serverBlock = typeof response.data === 'string'
+        ? `Комментарий сервера:\n${String(response.data)}`
+        : [
+            'Сервер: проект создан',
+            `ID: ${response.data.id}`,
+            `Статус: ${response.data.status}`,
+            `Создан: ${response.data.createdAt}`,
+          ].join('\n');
+      normsReportText.value = `${universal}\n\n${serverBlock}`;
     } else {
       normsReportText.value = universal;
     }
@@ -1315,7 +1323,7 @@ const formatBirthday = (value) => {
 };
 
 /**
- * Отправляет данные проекта на бэкенд через GraphQL
+ * Отправляет данные проекта на бэкенд через GraphQL (createPlanningProject)
  */
 const sendToApi = async (payload) => {
   if (!projectApiEnabled) {
@@ -1324,20 +1332,62 @@ const sendToApi = async (payload) => {
   }
 
   try {
-    const prompt = buildBtiPrompt(payload);
-    const userId = Number(getActiveUserId());
-    if (!Number.isFinite(userId)) {
-      throw new Error('Некорректный ID пользователя для BTI-агента.');
-    }
+    const plan = payload?.plan || {};
+    const geometry = payload?.geometry || {};
+    const walls = payload?.walls || [];
+    const constraints = payload?.constraints || {};
+
+    const regionRulesArr = Array.isArray(constraints.regionRules)
+      ? constraints.regionRules
+      : String(constraints.regionRules || '')
+          .split(';')
+          .map((s) => s.trim())
+          .filter(Boolean);
+
     const input = {
-      id: userId,
-      prompt,
+      plan: {
+        address: String(plan.address || ''),
+        area: Number(plan.area || 0),
+        source: String(plan.source || ''),
+        layoutType: String(plan.layoutType || ''),
+        familyProfile: String(plan.familyProfile || ''),
+        goal: String(plan.goal || ''),
+        prompt: String(plan.prompt || ''),
+        ceilingHeight: Number(plan.ceilingHeight || 2.7),
+        floorDelta: Number(plan.floorDelta || 0),
+        recognitionStatus: String(plan.recognitionStatus || 'idle'),
+      },
+      geometry: {
+        rooms: Array.isArray(geometry.rooms)
+          ? geometry.rooms.map((room, idx) => ({
+              id: room.id || `R${idx + 1}`,
+              name: String(room.name || `Помещение ${idx + 1}`),
+              height: Number(room.height || 2.7),
+              vertices: Array.isArray(room.vertices)
+                ? room.vertices.map((v) => ({ x: Number(v.x || 0), y: Number(v.y || 0) }))
+                : [],
+            }))
+          : [],
+      },
+      walls: Array.isArray(walls)
+        ? walls.map((w, idx) => ({
+            id: w.id || `W${idx + 1}`,
+            start: { x: Number(w.start?.x || 0), y: Number(w.start?.y || 0) },
+            end: { x: Number(w.end?.x || 0), y: Number(w.end?.y || 0) },
+            loadBearing: !!w.loadBearing,
+            thickness: Number(w.thickness || 0.12),
+          }))
+        : [],
+      constraints: {
+        forbiddenMoves: Array.isArray(constraints.forbiddenMoves) ? constraints.forbiddenMoves : [],
+        regionRules: regionRulesArr,
+      },
     };
-    console.debug('Отправляем askBTIagent:', { ...input, promptPreview: prompt.slice(0, 120) });
-    const result = await graphqlRequest(ASK_BTI_AGENT_MUTATION, { input });
+
+    const result = await graphqlRequest(CREATE_PLANNING_PROJECT_MUTATION, { input });
     return {
       ok: true,
-      data: result.askBTIagent,
+      data: result.createPlanningProject,
     };
   } catch (error) {
     console.error('Ошибка отправки данных на сервер:', error);
@@ -1513,7 +1563,10 @@ const handleSubmit = async () => {
     }
 
     if (response.ok && response.data) {
-      submitStatus.value = 'Данные отправлены в BTI-агент.';
+      const created = response.data;
+      submitStatus.value = created?.id
+        ? `Проект создан (ID: ${created.id}).`
+        : 'Проект создан.';
     } else {
       submitStatus.value = 'Не удалось подтвердить отправку.';
     }

@@ -21,12 +21,15 @@ export async function graphqlRequest(query, variables = {}) {
   try {
     // Пытаемся достать токен авторизации для ЛК (если он сохранён)
     let token = null;
+    let userIdHeader = null;
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         token = window.localStorage.getItem('authToken');
+        userIdHeader = window.localStorage.getItem('homeplanner3d:userId');
       }
     } catch {
       token = null;
+      userIdHeader = null;
     }
 
     const headers = {
@@ -36,6 +39,9 @@ export async function graphqlRequest(query, variables = {}) {
 
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (userIdHeader) {
+      headers['X-User-Id'] = String(userIdHeader);
     }
     
     // Формируем тело запроса в стандартном GraphQL формате

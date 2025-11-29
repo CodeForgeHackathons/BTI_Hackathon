@@ -1,17 +1,18 @@
 package main
 
 import (
-	"ServerBTI/graph"
-	"ServerBTI/internal/db"
-	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/99designs/gqlgen/graphql/handler/extension"
-	"github.com/99designs/gqlgen/graphql/handler/lru"
-	"github.com/99designs/gqlgen/graphql/handler/transport"
-	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/vektah/gqlparser/v2/ast"
-	"log"
-	"net/http"
-	"os"
+    "ServerBTI/graph"
+    "ServerBTI/internal/db"
+    "context"
+    "github.com/99designs/gqlgen/graphql/handler"
+    "github.com/99designs/gqlgen/graphql/handler/extension"
+    "github.com/99designs/gqlgen/graphql/handler/lru"
+    "github.com/99designs/gqlgen/graphql/handler/transport"
+    "github.com/99designs/gqlgen/graphql/playground"
+    "github.com/vektah/gqlparser/v2/ast"
+    "log"
+    "net/http"
+    "os"
 )
 
 const defaultPort = "8080"
@@ -41,10 +42,18 @@ func main() {
 		Cache: lru.New[string](100),
 	})
 
-	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	http.Handle("/query", srv)
+    http.Handle("/", playground.Handler("GraphQL playground", "/query"))
+    http.Handle("/query", withUserIDContext(srv))
 
 	log.Printf("connect to http://localhost:%s/ for GraphQL playground", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+    log.Fatal(http.ListenAndServe(":"+port, nil))
+}
 
+// withUserIDContext прокидывает X-User-Id из заголовка запроса в контекст резолверов
+func withUserIDContext(h http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        uid := r.Header.Get("X-User-Id")
+        ctx := context.WithValue(r.Context(), "userID", uid)
+        h.ServeHTTP(w, r.WithContext(ctx))
+    })
 }
