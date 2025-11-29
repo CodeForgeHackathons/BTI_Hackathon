@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <header v-if="!isAccountPage && !isChatPage" class="hero">
+    <header v-if="!isAccountPage && !isChatPage && !isConstructorPage" class="hero">
       <div class="hero__topbar">
         <span class="hero__logo"></span>
         <div class="hero__top-actions">
@@ -29,6 +29,7 @@
         <div class="hero__actions">
           <button class="btn btn--primary" @click="scrollToIntake">Загрузить план</button>
           <button class="btn btn--ghost" @click="scrollToGallery">Посмотреть примеры</button>
+          <button class="btn btn--ghost" @click="goToConstructor">Открыть конструктор</button>
         </div>
       </div>
       <div class="hero__visual">
@@ -49,7 +50,7 @@
       </div>
     </header>
 
-    <template v-if="!isAccountPage && !isChatPage">
+    <template v-if="!isAccountPage && !isChatPage && !isConstructorPage">
       <section class="intake" id="intake">
       <div class="section-header">
         <h2>Шаг 1. Расскажите о квартире</h2>
@@ -552,6 +553,8 @@
       @logout="handleLogout"
     />
 
+    <ConstructorPage v-else-if="isConstructorPage" @back="goToLandingFromConstructor" />
+
     <ChatPage v-else @back="goToLandingFromChat" />
 
     <!-- Модальное окно входа / регистрации -->
@@ -717,6 +720,7 @@
 <script setup>
 import { reactive, ref, onMounted, computed } from 'vue';
 import { graphqlRequest, CREATE_PLANNING_PROJECT_MUTATION } from './utils/graphqlClient.js';
+import ConstructorPage from './pages/ConstructorPage.vue';
 import AccountPage from './pages/AccountPage.vue';
 import ChatPage from './pages/ChatPage.vue';
 import beforeImageUrl from './assets/Сценарий «Семейная 70 м²»ДО.png';
@@ -1018,6 +1022,7 @@ const authError = ref('');
 const isAuthModalOpen = ref(false);
 const isAccountPage = ref(false);
 const isChatPage = ref(false);
+const isConstructorPage = ref(false);
 const isContactsOpen = ref(false);
 const isTelegramOpen = ref(false);
 const isPolicyOpen = ref(false);
@@ -1042,6 +1047,7 @@ const handleAccountButtonClick = () => {
 const goToLanding = () => {
   isAccountPage.value = false;
   isChatPage.value = false;
+  isConstructorPage.value = false;
 };
 
 const openAuthFromAccountPage = () => {
@@ -1060,6 +1066,14 @@ const goToChat = () => {
 
 const goToLandingFromChat = () => {
   isChatPage.value = false;
+};
+
+const goToConstructor = () => {
+  isConstructorPage.value = true;
+};
+
+const goToLandingFromConstructor = () => {
+  isConstructorPage.value = false;
 };
 
 const openContacts = () => { isContactsOpen.value = true; };
