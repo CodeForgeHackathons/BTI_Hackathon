@@ -356,8 +356,21 @@
           <p>{{ check.description }}</p>
         </article>
       </div>
-      <button class="btn btn--ghost">Получить отчёт по нормам</button>
+      <button class="btn btn--ghost" @click="openNormsReport">Получить отчёт по нормам</button>
     </section>
+
+    <div v-if="isNormsModalOpen" class="modal-backdrop" @click.self="closeNormsModal">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Универсальный отчёт по нормам</h3>
+          <button type="button" class="modal__close" @click="closeNormsModal">×</button>
+        </div>
+        <div class="modal__body report-modal">
+          <p v-if="isGeneratingReport">Формируем отчёт…</p>
+          <pre v-else class="report-modal__text">{{ normsReportText }}</pre>
+        </div>
+      </div>
+    </div>
 
     <section class="gallery" id="gallery">
       <div class="section-header">
@@ -648,6 +661,95 @@ const openCaseModal = () => {
 };
 const closeCaseModal = () => {
   isCaseModalOpen.value = false;
+};
+const isNormsModalOpen = ref(false);
+const isGeneratingReport = ref(false);
+const normsReportText = ref('');
+const closeNormsModal = () => {
+  isNormsModalOpen.value = false;
+  normsReportText.value = '';
+};
+
+const buildLocalNormsReport = (payload) => {
+  const p = payload || {};
+  const plan = p.plan || {};
+  const address = plan.address || '—';
+  const area = plan.area ? `${plan.area} м²` : '—';
+  const layoutType = plan.layoutType || '—';
+  const ceiling = plan.ceilingHeight ? `${plan.ceilingHeight} м` : '—';
+  const roomsCount = (p.geometry?.rooms || []).length;
+  const wallsCount = (p.walls || []).length;
+  const userConstraints = p.constraints?.forbiddenMoves || parseConstraints();
+
+  const sections = [];
+  sections.push([
+    'Сводка объекта',
+    `Адрес: ${address}`,
+    `Площадь: ${area}`,
+    `Тип квартиры: ${layoutType}`,
+    `Высота потолков: ${ceiling}`,
+    `Комнат (по геометрии): ${roomsCount}`,
+    `Стены: ${wallsCount}`,
+  ].join('\n'));
+
+  const statusLines = checks.map((c) => `- ${c.title}: ${c.statusLabel} — ${c.description}`);
+  sections.push(['Статусы проверок', ...statusLines].join('\n'));
+
+  sections.push([
+    'Ключевые требования',
+    '• Несущие стены: проёмы только с проектным усилением (перемычка/рама).',
+    '• Мокрые зоны: перенос кухни/санузла над жилыми — не допускается.',
+    '• Вентиляция: шахты не перекрывать; оборудование не переносить без проекта.',
+    '• Пожарная безопасность: минимальный проход эвакуации ≥ 0.9 м; двери мокрых зон ≥ 0.7 м.',
+  ].join('\n'));
+
+  sections.push([
+    'Рекомендации',
+    '• Зафиксируйте границы мокрых зон и трассы инженерии.',
+    '• Проверьте тип и расположение несущих стен по серии дома/техпаспорту.',
+    '• При изменении несущих/мокрых зон — подготовьте проект перепланировки для БТИ.',
+  ].join('\n'));
+
+  const nextSteps = [
+    '1) Уточнить адрес, этаж и серию дома.',
+    '2) Сформировать пакет: план ДО/ПОСЛЕ, экспликация, поэтажный план.',
+    '3) Отправить заявку: консультация эксперта и согласование.',
+  ];
+  sections.push(['Следующие шаги', ...nextSteps].join('\n'));
+
+  if (userConstraints?.length) {
+    sections.push(['Ограничения пользователя', ...userConstraints.map((r) => `- ${r}`)].join('\n'));
+  }
+
+  return sections.join('\n\n');
+};
+
+const openNormsReport = async () => {
+  isNormsModalOpen.value = true;
+  isGeneratingReport.value = true;
+  normsReportText.value = '';
+
+  try {
+    // Собираем payload из формы
+    handleGenerate();
+    let payload = {};
+    try {
+      payload = JSON.parse(generatedJson.value || '{}');
+    } catch {}
+
+    // Пытаемся получить отчёт с сервера
+    const response = await sendToApi(payload);
+    const universal = buildLocalNormsReport(payload);
+    if (response?.ok && response.data) {
+      normsReportText.value = `${universal}\n\nКомментарий сервера:\n${String(response.data)}`;
+    } else {
+      normsReportText.value = universal;
+    }
+  } catch (e) {
+    normsReportText.value = buildLocalNormsReport();
+  } finally {
+    isGeneratingReport.value = false;
+  }
 };
 
 // API включено по умолчанию, задайте VITE_ENABLE_PROJECT_API=false чтобы отключить
@@ -1962,6 +2064,18 @@ section {
 
 .case-modal__list {
   padding-left: 18px;
+  color: #c6cad4;
+}
+
+.report-modal {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.report-modal__text {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 14px;
   color: #c6cad4;
 }
 
