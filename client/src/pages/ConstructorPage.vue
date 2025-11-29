@@ -577,9 +577,12 @@ const mergeWalls = (wallsArray) => {
     while (found) {
       found = false
       
+      // Создаем временный объект для проверки коллинеарности
+      const currentWallObj = { start: currentStart, end: currentEnd, loadBearing: currentLoadBearing, thickness: currentThickness }
+      
       // Ищем продолжение от конечной точки
-      const next = findNextWall(currentEnd, new Set(processed))
-      if (next && next.wall.loadBearing === currentLoadBearing && Math.abs(next.wall.thickness - currentThickness) < tolerance) {
+      const next = findNextWall(currentEnd, new Set(processed), currentWallObj)
+      if (next && Math.abs(next.wall.thickness - currentThickness) < tolerance) {
         if (next.reverse) {
           currentEnd = next.wall.start
         } else {
@@ -587,13 +590,15 @@ const mergeWalls = (wallsArray) => {
         }
         mergedIds.push(next.wall.id || `W${next.index}`)
         processed.add(next.index)
+        // Обновляем объект для следующей итерации
+        currentWallObj.end = currentEnd
         found = true
         continue
       }
       
       // Ищем продолжение от начальной точки (разворачиваем)
-      const prev = findNextWall(currentStart, new Set(processed))
-      if (prev && prev.wall.loadBearing === currentLoadBearing && Math.abs(prev.wall.thickness - currentThickness) < tolerance) {
+      const prev = findNextWall(currentStart, new Set(processed), currentWallObj)
+      if (prev && Math.abs(prev.wall.thickness - currentThickness) < tolerance) {
         if (prev.reverse) {
           currentStart = prev.wall.end
         } else {
@@ -601,6 +606,8 @@ const mergeWalls = (wallsArray) => {
         }
         mergedIds.push(prev.wall.id || `W${prev.index}`)
         processed.add(prev.index)
+        // Обновляем объект для следующей итерации
+        currentWallObj.start = currentStart
         found = true
       }
     }
@@ -635,7 +642,21 @@ const attachSelected = () => {
   
   // Нормализуем стены при загрузке
   if (initialWalls.length) {
+    console.log('[Constructor] Raw walls from server:', initialWalls.map(w => ({
+      id: w.id,
+      loadBearing: w.loadBearing,
+      wallType: w.wallType,
+      thickness: w.thickness
+    })))
+    
     const normalized = initialWalls.map(normalizeWall).filter(w => w !== null)
+    console.log('[Constructor] After normalization:', normalized.map(w => ({
+      id: w.id,
+      loadBearing: w.loadBearing,
+      wallType: w.wallType,
+      thickness: w.thickness
+    })))
+    
     // Объединяем последовательные стены
     walls.value = mergeWalls(normalized)
     console.log('[Constructor] Normalized walls:', normalized.length, 'merged to:', walls.value.length)
