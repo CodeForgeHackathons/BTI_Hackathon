@@ -466,24 +466,13 @@ const normalizeWall = (wall) => {
   // Нормализуем wallType
   let normalizedType = String(wall.wallType || '').toLowerCase().trim()
   
-  // Определяем толщину стены
-  const thickness = Number(wall.thickness) || 0.12
+  // Если wallType содержит "несущ" - это несущая стена
+  const isLoadBearingFromType = normalizedType.includes('несущ') || normalizedType.includes('bearing')
   
-  // Определяем loadBearing: ПО УМОЛЧАНИЮ ВСЕ СТЕНЫ - ПЕРЕГОРОДКИ (ненесущие)
-  // Только если явно указано, что несущая - делаем несущей
-  let loadBearing = false
-  
-  // Проверяем явные признаки несущей стены
-  if (normalizedType.includes('несущ') || normalizedType.includes('bearing')) {
-    loadBearing = true
-  } else if (wall.loadBearing === true) {
-    // Явно указано, что несущая
-    loadBearing = true
-  } else if (thickness >= 0.25) {
-    // Очень толстые стены (>= 25см) - вероятно несущие
-    loadBearing = true
-  }
-  // Во всех остальных случаях - перегородка (ненесущая)
+  // Определяем loadBearing: приоритет у явного значения, иначе из wallType
+  const loadBearing = wall.loadBearing !== undefined 
+    ? Boolean(wall.loadBearing) 
+    : isLoadBearingFromType
   
   // Нормализуем wallType на основе loadBearing
   if (loadBearing) {
@@ -495,156 +484,8 @@ const normalizeWall = (wall) => {
   return {
     ...wall,
     loadBearing,
-    wallType: normalizedType,
-    thickness: thickness
+    wallType: normalizedType
   }
-}
-
-// Объединяет последовательные стены в одну непрерывную линию
-const mergeWalls = (wallsArray) => {
-  if (!Array.isArray(wallsArray) || wallsArray.length === 0) return []
-  
-  console.log('[mergeWalls] Starting merge of', wallsArray.length, 'walls')
-  
-  const merged = []
-  const processed = new Set()
-  const tolerance = 0.15 // Большая толерантность для объединения
-  
-  // Функция для проверки, совпадают ли две точки
-  const pointsEqual = (p1, p2) => {
-    return Math.abs(p1.x - p2.x) < tolerance && Math.abs(p1.y - p2.y) < tolerance
-  }
-  
-  // Функция для проверки, лежат ли стены на одной линии (упрощенная)
-  const areCollinear = (wall1, wall2) => {
-    const dx1 = wall1.end.x - wall1.start.x
-    const dy1 = wall1.end.y - wall1.start.y
-    const dx2 = wall2.end.x - wall2.start.x
-    const dy2 = wall2.end.y - wall2.start.y
-    
-    const len1 = Math.hypot(dx1, dy1)
-    const len2 = Math.hypot(dx2, dy2)
-    if (len1 < 0.01 || len2 < 0.01) return true
-    
-    // Нормализуем векторы
-    const nx1 = dx1 / len1
-    const ny1 = dy1 / len1
-    const nx2 = dx2 / len2
-    const ny2 = dy2 / len2
-    
-    // Проверяем параллельность (скалярное произведение близко к ±1)
-    const dot = nx1 * nx2 + ny1 * ny2
-    return Math.abs(Math.abs(dot) - 1) < 0.2 // Еще более мягкая проверка
-  }
-  
-  // Функция для поиска следующей стены, которая продолжает текущую
-  const findNextWall = (endPoint, excludeIds, currentWall) => {
-    for (let i = 0; i < wallsArray.length; i++) {
-      if (processed.has(i) || excludeIds.has(i)) continue
-      const wall = wallsArray[i]
-      
-      // Проверяем, что стены одного типа и толщины
-      if (wall.loadBearing !== currentWall.loadBearing) continue
-      if (Math.abs(wall.thickness - currentWall.thickness) >= tolerance) continue
-      
-      // Проверяем, начинается ли стена с конечной точки текущей
-      if (pointsEqual(wall.start, endPoint)) {
-        // Объединяем если стены коллинеарны (на одной линии)
-        if (areCollinear(currentWall, wall)) {
-          return { index: i, wall, reverse: false }
-        }
-      }
-      // Проверяем, заканчивается ли стена в конечной точке текущей
-      if (pointsEqual(wall.end, endPoint)) {
-        if (areCollinear(currentWall, wall)) {
-          return { index: i, wall, reverse: true }
-        }
-      }
-    }
-    return null
-  }
-  
-  // Обрабатываем каждую стену
-  for (let i = 0; i < wallsArray.length; i++) {
-    if (processed.has(i)) continue
-    
-    const startWall = wallsArray[i]
-    let currentStart = { x: startWall.start.x, y: startWall.start.y }
-    let currentEnd = { x: startWall.end.x, y: startWall.end.y }
-    let currentLoadBearing = startWall.loadBearing
-    let currentThickness = startWall.thickness
-    let mergedIds = [startWall.id || `W${i}`]
-    
-    processed.add(i)
-    
-    // Пытаемся продолжить линию в обе стороны
-    let found = true
-    let iterations = 0
-    const maxIterations = 100 // Защита от бесконечного цикла
-    
-    while (found && iterations < maxIterations) {
-      iterations++
-      found = false
-      
-      // Создаем временный объект для проверки коллинеарности
-      const currentWallObj = { 
-        start: { x: currentStart.x, y: currentStart.y }, 
-        end: { x: currentEnd.x, y: currentEnd.y }, 
-        loadBearing: currentLoadBearing, 
-        thickness: currentThickness 
-      }
-      
-      // Ищем продолжение от конечной точки
-      const next = findNextWall(currentEnd, new Set(processed), currentWallObj)
-      if (next) {
-        if (next.reverse) {
-          currentEnd = { x: next.wall.start.x, y: next.wall.start.y }
-        } else {
-          currentEnd = { x: next.wall.end.x, y: next.wall.end.y }
-        }
-        mergedIds.push(next.wall.id || `W${next.index}`)
-        processed.add(next.index)
-        found = true
-        continue
-      }
-      
-      // Ищем продолжение от начальной точки (разворачиваем)
-      const prev = findNextWall(currentStart, new Set(processed), currentWallObj)
-      if (prev) {
-        if (prev.reverse) {
-          currentStart = { x: prev.wall.end.x, y: prev.wall.end.y }
-        } else {
-          currentStart = { x: prev.wall.start.x, y: prev.wall.start.y }
-        }
-        mergedIds.push(prev.wall.id || `W${prev.index}`)
-        processed.add(prev.index)
-        found = true
-      }
-    }
-    
-    // Создаем объединенную стену
-    const mergedWall = {
-      id: mergedIds.length > 1 ? `M${mergedIds.join('_')}` : mergedIds[0],
-      start: currentStart,
-      end: currentEnd,
-      loadBearing: currentLoadBearing,
-      thickness: currentThickness,
-      wallType: currentLoadBearing ? 'несущая' : 'перегородка',
-      mergedFrom: mergedIds.length > 1 ? mergedIds : undefined
-    }
-    
-    if (mergedIds.length > 1) {
-      console.log('[mergeWalls] Merged', mergedIds.length, 'walls into one:', {
-        id: mergedWall.id,
-        length: Math.hypot(currentEnd.x - currentStart.x, currentEnd.y - currentStart.y).toFixed(2)
-      })
-    }
-    
-    merged.push(mergedWall)
-  }
-  
-  console.log('[mergeWalls] Merge complete:', wallsArray.length, '→', merged.length, 'walls')
-  return merged
 }
 
 const attachSelected = () => {
@@ -662,46 +503,8 @@ const attachSelected = () => {
   
   // Нормализуем стены при загрузке
   if (initialWalls.length) {
-    console.log('[Constructor] Raw walls from server (first 5):', initialWalls.slice(0, 5).map(w => ({
-      id: w.id,
-      loadBearing: w.loadBearing,
-      wallType: w.wallType,
-      thickness: w.thickness,
-      start: w.start,
-      end: w.end
-    })))
-    
-    const normalized = initialWalls.map(normalizeWall).filter(w => w !== null)
-    console.log('[Constructor] After normalization (first 5):', normalized.slice(0, 5).map(w => ({
-      id: w.id,
-      loadBearing: w.loadBearing,
-      wallType: w.wallType,
-      thickness: w.thickness
-    })))
-    
-    const loadBearingCount = normalized.filter(w => w.loadBearing).length
-    const nonBearingCount = normalized.filter(w => !w.loadBearing).length
-    console.log('[Constructor] Before merge - LoadBearing:', loadBearingCount, 'NonBearing:', nonBearingCount)
-    
-    // Объединяем последовательные стены
-    walls.value = mergeWalls(normalized)
-    console.log('[Constructor] Normalized walls:', normalized.length, 'merged to:', walls.value.length)
-    console.log('[Constructor] Wall types after merge:', {
-      loadBearing: walls.value.filter(w => w.loadBearing).length,
-      nonBearing: walls.value.filter(w => !w.loadBearing).length
-    })
-    
-    // Показываем примеры объединенных стен
-    const mergedWalls = walls.value.filter(w => w.mergedFrom && w.mergedFrom.length > 1)
-    if (mergedWalls.length > 0) {
-      console.log('[Constructor] Merged walls examples:', mergedWalls.slice(0, 3).map(w => ({
-        id: w.id,
-        mergedFrom: w.mergedFrom,
-        length: Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y)
-      })))
-    } else {
-      console.warn('[Constructor] No walls were merged! Check mergeWalls function.')
-    }
+    walls.value = initialWalls.map(normalizeWall).filter(w => w !== null)
+    console.log('[Constructor] Normalized walls:', walls.value.length)
   } else {
     walls.value = buildWallsFromGeometry(p.geometry)
     console.log('[Constructor] Built walls from geometry:', walls.value.length)
