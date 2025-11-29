@@ -376,8 +376,10 @@ const draw = () => {
     const a = worldToScreen(wline.start.x, wline.start.y)
     const b = worldToScreen(wline.end.x, wline.end.y)
     ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy)
-    ctx.lineWidth = Math.max(3, wline.thickness * view.scale)
-    ctx.strokeStyle = wline.loadBearing ? '#7dff8e' : '#e9ecf8'
+    // Тонкие линии: минимальная толщина 1.5px, максимальная 2.5px
+    ctx.lineWidth = Math.max(1.5, Math.min(2.5, wline.thickness * view.scale * 0.5))
+    // Красный для несущих, желтый для ненесущих
+    ctx.strokeStyle = wline.loadBearing ? '#ff4444' : '#ffd700'
     ctx.stroke()
   }
 
@@ -610,8 +612,8 @@ watch(selectedProjectId, (val) => {
 .constructor__canvas-wrap canvas { width: 100%; height: 100%; display: block; }
 .constructor__legend { padding: 8px 12px; display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
 .legend { font-size: 12px; color: #c7d3ff; }
-.legend--load { color: #7dff8e; }
-.legend--part { color: #e9ecf8; }
+.legend--load { color: #ff4444; }
+.legend--part { color: #ffd700; }
 .unity__host { position: relative; height: clamp(340px, 55vh, 520px); display: grid; place-items: center; padding: 8px; }
 .unity__placeholder { text-align: center; color: #c7cbe0; }
 .unity__connected { text-align: center; color: #8ef59b; }
