@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <header v-if="!isAccountPage" class="hero">
+    <header v-if="!isAccountPage && !isChatPage" class="hero">
       <div class="hero__topbar">
         <span class="hero__logo"></span>
         <div class="hero__top-actions">
@@ -49,7 +49,7 @@
       </div>
     </header>
 
-    <template v-if="!isAccountPage">
+    <template v-if="!isAccountPage && !isChatPage">
       <section class="intake" id="intake">
       <div class="section-header">
         <h2>Шаг 1. Расскажите о квартире</h2>
@@ -526,7 +526,7 @@
       </div>
       <div class="faq__actions">
         <button class="btn btn--ghost" @click="downloadGuide">Скачать гид по перепланировке</button>
-        <button class="btn btn--primary btn--small">Чат с экспертом</button>
+        <button class="btn btn--primary btn--small" @click="goToChat">Чат с экспертом</button>
       </div>
     </section>
 
@@ -544,13 +544,15 @@
     </template>
 
     <AccountPage
-      v-else
+      v-else-if="isAccountPage"
       :user="currentUser"
       :format-birthday="formatBirthday"
       @back="goToLanding"
       @open-auth="openAuthFromAccountPage"
       @logout="handleLogout"
     />
+
+    <ChatPage v-else @back="goToLandingFromChat" />
 
     <!-- Модальное окно входа / регистрации -->
     <div v-if="isAuthModalOpen" class="modal-backdrop" @click.self="isAuthModalOpen = false">
@@ -667,6 +669,7 @@
 import { reactive, ref, onMounted, computed } from 'vue';
 import { graphqlRequest, ASK_BTI_AGENT_MUTATION } from './utils/graphqlClient.js';
 import AccountPage from './pages/AccountPage.vue';
+import ChatPage from './pages/ChatPage.vue';
 import beforeImageUrl from './assets/Сценарий «Семейная 70 м²»ДО.png';
 import afterImageUrl from './assets/Сценарий «Семейная 70 м²»ПОСЛЕ.png';
 import demoImageUrl from './assets/ВертКвар.png';
@@ -957,6 +960,7 @@ const authLoading = ref(false);
 const authError = ref('');
 const isAuthModalOpen = ref(false);
 const isAccountPage = ref(false);
+const isChatPage = ref(false);
 
 const authForm = reactive({
   login: '',
@@ -977,6 +981,7 @@ const handleAccountButtonClick = () => {
 
 const goToLanding = () => {
   isAccountPage.value = false;
+  isChatPage.value = false;
 };
 
 const openAuthFromAccountPage = () => {
@@ -987,6 +992,14 @@ const handleLogout = () => {
   logout();
   isAccountPage.value = false;
   isAuthModalOpen.value = false;
+};
+
+const goToChat = () => {
+  isChatPage.value = true;
+};
+
+const goToLandingFromChat = () => {
+  isChatPage.value = false;
 };
 
 const parseRooms = () =>
