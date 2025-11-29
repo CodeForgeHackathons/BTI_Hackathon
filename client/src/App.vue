@@ -33,7 +33,7 @@ const clearStoredUserId = () => {
 
 <template>
   <div class="page">
-    <header class="hero">
+    <header v-if="!isAccountPage" class="hero">
       <div class="hero__topbar">
         <span class="hero__logo"></span>
         <div class="hero__top-actions">
@@ -587,7 +587,7 @@ const clearStoredUserId = () => {
 <script setup>
 import { reactive, ref, onMounted } from 'vue';
 import { graphqlRequest, CREATE_PLANNING_PROJECT_MUTATION } from './utils/graphqlClient.js';
-import AccountPage from './components/AccountPage.vue';
+import AccountPage from './pages/AccountPage.vue';
  
 // Ленивая загрузка распознавателя (чтобы не блокировать загрузку страницы)
 let planRecognizer = null;
@@ -701,11 +701,11 @@ const authForm = reactive({
 });
 
 const handleAccountButtonClick = () => {
+  isAccountPage.value = true;
   if (currentUser.value) {
-    isAccountPage.value = true;
     isAuthModalOpen.value = false;
   } else {
-    isAuthModalOpen.value = true;
+    isAuthModalOpen.value = false;
   }
 };
 
@@ -714,7 +714,6 @@ const goToLanding = () => {
 };
 
 const openAuthFromAccountPage = () => {
-  isAccountPage.value = false;
   isAuthModalOpen.value = true;
 };
 
@@ -2171,14 +2170,112 @@ section {
 
   .hero {
     padding: 32px;
+    grid-template-columns: 1fr;
+    gap: 28px;
   }
 
   .hero__actions {
     flex-direction: column;
+    width: 100%;
+  }
+
+  .hero__actions .btn {
+    width: 100%;
+  }
+
+  .hero__topbar {
+    position: static;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    pointer-events: auto;
+  }
+
+  .hero__top-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .hero__visual {
+    order: 3;
   }
 
   .footer {
     flex-direction: column;
+  }
+
+  .intake__form {
+    grid-template-columns: 1fr;
+  }
+
+  .intake__actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .intake__actions .btn {
+    width: 100%;
+  }
+
+  .recognition {
+    grid-template-columns: 1fr;
+  }
+
+  .builder__grid,
+  .builder__modes,
+  .checks__list,
+  .gallery__grid,
+  .ai__grid,
+  .testimonials__list,
+  .faq__list {
+    grid-template-columns: 1fr;
+  }
+
+  .experts {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+
+@media (max-width: 540px) {
+  .page {
+    padding: 20px 18px 60px;
+  }
+
+  .hero {
+    padding: 28px 24px;
+  }
+
+  .hero__subtitle {
+    font-size: 16px;
+  }
+
+  .intake {
+    padding: 24px;
+  }
+
+  .intake__form label {
+    font-size: 13px;
+  }
+
+  .demo {
+    padding: 28px;
+  }
+
+  .experts {
+    padding: 28px;
+  }
+
+  .faq__actions {
+    flex-direction: column;
+  }
+
+  .faq__actions .btn {
+    width: 100%;
+  }
+
+  .footer {
+    gap: 12px;
   }
 }
 </style>

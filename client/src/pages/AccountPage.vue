@@ -1,14 +1,15 @@
 <template>
   <section class="lk">
-    <header class="lk__header">
+    <div class="lk__hero">
       <div>
         <p class="lk__eyebrow">Личный кабинет</p>
-        <h2>{{ user ? 'Ваши данные и проекты' : 'Войдите, чтобы продолжить' }}</h2>
+        <h1>{{ user ? 'Ваши данные и проекты' : 'Войдите, чтобы продолжить' }}</h1>
         <p>
-          Здесь будут собираться статусы проектов, документы для БТИ и связи с экспертами.
+          Здесь будут статусы распознавания, проверки норм и документы для БТИ. Авторизуйтесь, чтобы
+          продолжить работу над проектом.
         </p>
       </div>
-      <div class="lk__header-actions">
+      <div class="lk__hero-actions">
         <button type="button" class="btn btn--ghost btn--small" @click="$emit('back')">
           ← На главную
         </button>
@@ -18,7 +19,7 @@
           class="btn btn--ghost btn--small lk__logout"
           @click="$emit('logout')"
         >
-          Выйти
+          Выйти из аккаунта
         </button>
         <button
           v-else
@@ -29,7 +30,7 @@
           Войти
         </button>
       </div>
-    </header>
+    </div>
 
     <div v-if="user" class="lk__grid">
       <article class="lk-card lk-card--accent">
@@ -63,8 +64,8 @@
           <small>Скоро появятся</small>
         </div>
         <p class="lk-card__text">
-          После отправки данных о квартире здесь появятся статусы распознавания, проверки норм и
-          готовые пакеты документов.
+          После отправки данных о квартире здесь будут статусы распознавания, проверки норм и готовые
+          пакеты документов.
         </p>
         <ul class="lk-card__pills">
           <li>AI-варианты</li>
@@ -104,7 +105,7 @@
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   user: {
     type: Object,
     default: null,
@@ -120,21 +121,23 @@ defineEmits(['back', 'open-auth', 'logout']);
 
 <style scoped>
 .lk {
-  margin-top: 56px;
-  padding: 40px;
-  border-radius: 28px;
-  background: #0f111c;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 48px auto 96px;
+  max-width: 1200px;
+  padding: 0 16px;
   display: flex;
   flex-direction: column;
   gap: 32px;
 }
 
-.lk__header {
+.lk__hero {
+  padding: 36px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(47, 93, 255, 0.2), rgba(32, 201, 151, 0.15));
+  border: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 24px;
+  align-items: flex-start;
 }
 
 .lk__eyebrow {
@@ -142,13 +145,14 @@ defineEmits(['back', 'open-auth', 'logout']);
   letter-spacing: 0.12em;
   font-size: 12px;
   margin-bottom: 6px;
-  color: #7f8bb0;
+  color: #d3d8ff;
 }
 
-.lk__header-actions {
+.lk__hero-actions {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .lk__grid {
@@ -170,10 +174,11 @@ defineEmits(['back', 'open-auth', 'logout']);
   display: flex;
   flex-direction: column;
   gap: 16px;
+  width: 100%;
 }
 
 .lk-card--accent {
-  background: linear-gradient(135deg, rgba(47, 93, 255, 0.2), rgba(32, 201, 151, 0.15));
+  background: rgba(20, 24, 41, 0.85);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
@@ -237,6 +242,7 @@ defineEmits(['back', 'open-auth', 'logout']);
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  align-items: center;
 }
 
 .lk__logout {
@@ -246,16 +252,58 @@ defineEmits(['back', 'open-auth', 'logout']);
 
 @media (max-width: 768px) {
   .lk {
-    padding: 28px;
+    margin-top: 32px;
+    margin-bottom: 64px;
   }
 
-  .lk__header {
+  .lk__hero {
     flex-direction: column;
+    padding: 28px;
+    gap: 16px;
+  }
+
+  .lk__hero-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .lk__hero-actions .btn {
+    width: 100%;
+  }
+
+  .lk__grid {
+    grid-template-columns: 1fr;
   }
 
   .lk-card__list li {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .lk-card {
+    padding: 20px;
+  }
+
+  .lk-card__actions {
+    flex-direction: column;
+  }
+
+  .lk-card__actions .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .lk__hero {
+    border-radius: 20px;
+  }
+
+  .lk-card {
+    border-radius: 16px;
+  }
+
+  .lk-card__pills {
+    flex-direction: column;
   }
 }
 </style>
