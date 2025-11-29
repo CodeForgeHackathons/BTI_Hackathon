@@ -15,7 +15,7 @@ func InitDataBase() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if err := db.AutoMigrate(&models.User{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Walls{}, &models.Planning_projects{}, &models.Rooms{}, &models.Constraints{}); err != nil {
 		return nil, err
 	}
 	fmt.Println("Database is connected!")
