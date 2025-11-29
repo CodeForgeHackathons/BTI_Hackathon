@@ -416,11 +416,38 @@
           </ul>
         </article>
       </div>
-      <button class="btn btn--primary btn--small">Запросить варианты AI</button>
+      <button class="btn btn--primary btn--small" @click="openAiRequestModal">Запросить варианты AI</button>
     </section>
 
+    <div v-if="isAiRequestModalOpen" class="modal-backdrop" @click.self="closeAiRequestModal">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Запрос вариантов AI</h3>
+          <button type="button" class="modal__close" @click="closeAiRequestModal">×</button>
+        </div>
+        <div class="modal__body ai-request">
+          <form class="ai-request__form" @submit.prevent="submitAiRequest">
+            <label>
+              Цели человека
+              <textarea v-model="aiRequest.goals" rows="4" placeholder="Добавить кабинет, больше света, удобная детская"></textarea>
+            </label>
+            <label>
+              Набор ограничений
+              <textarea v-model="aiRequest.constraints" rows="4" placeholder="нельзя переносить кухню над жилой\nсохранить вентшахту"></textarea>
+            </label>
+            <div class="ai-request__actions">
+              <button type="submit" class="btn btn--primary btn--small">Отправить запрос</button>
+              <button type="button" class="btn btn--ghost btn--small" @click="closeAiRequestModal">Отмена</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <section class="demo">
-      <div class="demo__media"></div>
+      <div class="demo__media">
+        <img :src="demoImageUrl" alt="Визуализация квартиры" class="demo__img" loading="lazy" />
+      </div>
       <div class="demo__content">
         <h2>Интерактивная 3D и AR визуализация</h2>
         <p>
@@ -428,7 +455,7 @@
           режимом сверху и прогулкой от первого лица с семьёй или архитектором,
           оставляйте комментарии и фиксируйте правки.
         </p>
-        <button class="btn btn--primary">Попробовать демо</button>
+        <button class="btn btn--primary" @click="scrollToIntake">Попробовать демо</button>
       </div>
     </section>
 
@@ -465,17 +492,24 @@
       <form class="experts__form">
         <label>
           Имя и город
-          <input type="text" placeholder="Мария, Москва" />
+          <input v-model="expertsForm.nameCity" type="text" placeholder="Мария, Москва" />
+          <small class="field-hint">Формат: Имя, Город. Например: Анна-Мария, Нижний Новгород.</small>
+          <small v-if="expertErrors.nameCity" class="field-error">{{ expertErrors.nameCity }}</small>
         </label>
         <label>
           Контакт
-          <input type="text" placeholder="@telegram или телефон" />
+          <input v-model="expertsForm.contact" type="text" placeholder="@telegram или телефон" />
+          <small class="field-hint">Telegram: @username или телефон: +7 916 123-45-67</small>
+          <small v-if="expertErrors.contact" class="field-error">{{ expertErrors.contact }}</small>
         </label>
         <label>
           Комментарий
-          <textarea placeholder="Квартира 62 м², нужен проект перепланировки"></textarea>
+          <textarea v-model="expertsForm.comment" placeholder="Квартира 62 м², нужен проект перепланировки"></textarea>
+          <small class="field-hint">Опишите задачу. Например: «Перепланировка 70 м², увеличить кухню‑гостиную».</small>
+          <small v-if="expertErrors.comment" class="field-error">{{ expertErrors.comment }}</small>
         </label>
-        <button type="button" class="btn btn--primary">Отправить заявку</button>
+        <button type="button" class="btn btn--primary" @click="submitExpertRequest" :disabled="!canSubmitExpert">Отправить заявку</button>
+        <p v-if="expertSubmitStatus" class="experts__status">{{ expertSubmitStatus }}</p>
       </form>
     </section>
 
@@ -630,11 +664,12 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue';
+import { reactive, ref, onMounted, computed } from 'vue';
 import { graphqlRequest, ASK_BTI_AGENT_MUTATION } from './utils/graphqlClient.js';
 import AccountPage from './pages/AccountPage.vue';
 import beforeImageUrl from './assets/Сценарий «Семейная 70 м²»ДО.png';
 import afterImageUrl from './assets/Сценарий «Семейная 70 м²»ПОСЛЕ.png';
+import demoImageUrl from './assets/ВертКвар.png';
 
 const scrollToSection = (id) => {
   try {
@@ -668,6 +703,42 @@ const normsReportText = ref('');
 const closeNormsModal = () => {
   isNormsModalOpen.value = false;
   normsReportText.value = '';
+};
+const isAiRequestModalOpen = ref(false);
+const aiRequest = reactive({ goals: '', constraints: '' });
+const openAiRequestModal = () => {
+  aiRequest.goals = formData.goal || '';
+  aiRequest.constraints = formData.constraintsText || '';
+  isAiRequestModalOpen.value = true;
+};
+const closeAiRequestModal = () => {
+  isAiRequestModalOpen.value = false;
+};
+const downloadAiRequestJson = (goals, constraintsText) => {
+  const constraints = (constraintsText || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const payload = {
+    timestamp: new Date().toISOString(),
+    aiRequest: {
+      goals: goals || '',
+      constraints,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `homeplanner3d-ai-request-${Date.now()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+const submitAiRequest = () => {
+  formData.goal = aiRequest.goals || formData.goal;
+  formData.constraintsText = aiRequest.constraints || formData.constraintsText;
+  isAiRequestModalOpen.value = false;
+  downloadAiRequestJson(aiRequest.goals, aiRequest.constraints);
 };
 
 const buildLocalNormsReport = (payload) => {
@@ -1590,6 +1661,66 @@ const faq = [
       'Все планы шифруются, хранятся в изолированном контуре и удаляются по запросу.',
   },
 ];
+
+const expertSubmitStatus = ref('');
+const expertsForm = reactive({ nameCity: '', contact: '', comment: '' });
+const canSubmitExpert = computed(() => {
+  const nameCity = expertsForm.nameCity.trim();
+  const contact = expertsForm.contact.trim();
+  const comment = expertsForm.comment.trim();
+  const placeholderName = 'Мария, Москва';
+  const placeholderContact = '@telegram или телефон';
+  const placeholderComment = 'Квартира 62 м², нужен проект перепланировки';
+  if (!nameCity || nameCity === placeholderName) return false;
+  if (!/^[A-Za-zА-Яа-яёЁ][A-Za-zА-Яа-яёЁ\-\s]*\s*,\s*[A-Za-zА-Яа-яёЁ\-\s]+$/.test(nameCity)) return false;
+  if (!contact || contact === placeholderContact) return false;
+  const phoneOk = /^\+?[0-9\-\s()]{10,20}$/.test(contact);
+  const tgOk = /^@[A-Za-z0-9_]{5,32}$/.test(contact);
+  if (!(phoneOk || tgOk)) return false;
+  if (!comment || comment === placeholderComment) return false;
+  if (comment.length < 8) return false;
+  return true;
+});
+const submitExpertRequest = () => {
+  if (!canSubmitExpert.value) {
+    expertSubmitStatus.value = '';
+    return;
+  }
+  expertSubmitStatus.value = 'Заявка Отправлена';
+};
+const expertErrors = computed(() => {
+  const errors = { nameCity: '', contact: '', comment: '' };
+  const nameCity = expertsForm.nameCity.trim();
+  const contact = expertsForm.contact.trim();
+  const comment = expertsForm.comment.trim();
+  const placeholderName = 'Мария, Москва';
+  const placeholderContact = '@telegram или телефон';
+  const placeholderComment = 'Квартира 62 м², нужен проект перепланировки';
+
+  if (!nameCity || nameCity === placeholderName) {
+    errors.nameCity = 'Введите «Имя, Город»';
+  } else if (!/^[A-Za-zА-Яа-яёЁ][A-Za-zА-Яа-яёЁ\-\s]*\s*,\s*[A-Za-zА-Яа-яёЁ\-\s]+$/.test(nameCity)) {
+    errors.nameCity = 'Формат: Имя, Город (буквы, пробелы, дефис)';
+  }
+
+  if (!contact || contact === placeholderContact) {
+    errors.contact = 'Укажите @telegram или телефон';
+  } else {
+    const phoneOk = /^\+?[0-9\-\s()]{10,20}$/.test(contact);
+    const tgOk = /^@[A-Za-z0-9_]{5,32}$/.test(contact);
+    if (!(phoneOk || tgOk)) {
+      errors.contact = 'Пример: @username или +7 916 123-45-67';
+    }
+  }
+
+  if (!comment || comment === placeholderComment) {
+    errors.comment = 'Опишите задачу в нескольких словах';
+  } else if (comment.length < 8) {
+    errors.comment = 'Комментарий слишком короткий';
+  }
+
+  return errors;
+});
 </script>
 
 <style scoped>
@@ -2079,6 +2210,33 @@ section {
   color: #c6cad4;
 }
 
+.ai-request__form {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-request__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #dfe2ea;
+}
+
+.ai-request__form textarea {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  padding: 10px;
+  font-family: inherit;
+}
+
+.ai-request__actions {
+  display: flex;
+  gap: 8px;
+}
+
 .recognition {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -2118,6 +2276,14 @@ section {
   height: auto;
   border-radius: 14px;
   margin-top: 12px;
+  background: #0b0d12;
+}
+
+.demo__img {
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 18px;
   background: #0b0d12;
 }
 
@@ -2351,6 +2517,21 @@ section {
 .experts__form textarea {
   min-height: 96px;
   resize: none;
+}
+
+.experts__status {
+  color: #a5ffb6;
+  font-weight: 600;
+}
+
+.field-hint {
+  color: #98a2c3;
+  font-size: 12px;
+}
+
+.field-error {
+  color: #ff9b9b;
+  font-size: 12px;
 }
 
 .faq__list {
