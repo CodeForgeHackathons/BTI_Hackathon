@@ -294,8 +294,13 @@
 "Assets/Mini First Person Controller/Scripts/Components/Zoom.cs"
 "Assets/Mini First Person Controller/Scripts/FirstPersonLook.cs"
 "Assets/Mini First Person Controller/Scripts/FirstPersonMovement.cs"
+"Assets/Scripts/AddDeleteWalls.cs"
+"Assets/Scripts/ChangeView.cs"
 "Assets/Scripts/CreateMap.cs"
 "Assets/Scripts/DoorTeleportSyst.cs"
+"Assets/Scripts/PanelScript.cs"
+"Assets/Scripts/SceneController.cs"
+"Assets/Scripts/SpawnPlayer.cs"
 "Assets/Scripts/WaiterInfo.cs"
 -langversion:9.0
 /deterministic

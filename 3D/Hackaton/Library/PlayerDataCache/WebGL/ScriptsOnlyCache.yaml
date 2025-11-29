@@ -1,20 +1,37 @@
 ScriptsOnlyBuild:
   usedScripts:
     Assembly-CSharp.dll:
+    - ChangeView
     - DoorTeleportSystem
     - FirstPersonAudio
     - FirstPersonLook
     - FirstPersonMovement
     - GroundCheck
+    - PanelScript
+    - SceneController
     - SimpleMapGenerator
-    - TestMap
+    - SimpleWallBuilder
     Unity.Rider.Editor.dll:
     - Packages.Rider.Editor.UnitTesting.CallbackData
+    Unity.Timeline.Editor.dll:
+    - TimelineProjectSettings
     UnityEditor.TestRunner.dll:
     - UnityEditor.TestTools.TestRunner.Api.CallbacksHolder
     - UnityEditor.TestTools.TestRunner.TestListCacheData
     - UnityEditor.TestTools.TestRunner.TestRun.TestJobDataHolder
-  serializedClasses: {}
+    UnityEngine.UI.dll:
+    - UnityEngine.EventSystems.EventSystem
+    - UnityEngine.EventSystems.StandaloneInputModule
+    - UnityEngine.UI.CanvasScaler
+    - UnityEngine.UI.GraphicRaycaster
+    - UnityEngine.UI.GridLayoutGroup
+    - UnityEngine.UI.RawImage
+  serializedClasses:
+    UnityEngine.CoreModule:
+    - UnityEngine.Events.PersistentCallGroup
+    - UnityEngine.RectOffset
+    UnityEngine.UI:
+    - UnityEngine.UI.MaskableGraphic/CullStateChangedEvent
   methodsToPreserve: []
   sceneClasses:
     Assets/Scenes/SampleScene.unity:
@@ -38,6 +55,8 @@ ScriptsOnlyBuild:
       Script: {instanceID: 0}
     - Class: 54
       Script: {instanceID: 0}
+    - Class: 65
+      Script: {instanceID: 0}
     - Class: 81
       Script: {instanceID: 0}
     - Class: 82
@@ -51,19 +70,41 @@ ScriptsOnlyBuild:
     - Class: 108
       Script: {instanceID: 0}
     - Class: 114
-      Script: {instanceID: 1900}
+      Script: {instanceID: 1898}
     - Class: 114
-      Script: {instanceID: 2454}
+      Script: {instanceID: 2314}
     - Class: 114
-      Script: {instanceID: 2660}
+      Script: {instanceID: 2452}
     - Class: 114
-      Script: {instanceID: 5642}
+      Script: {instanceID: 2618}
     - Class: 114
-      Script: {instanceID: 7016}
+      Script: {instanceID: 2658}
     - Class: 114
-      Script: {instanceID: 8078}
+      Script: {instanceID: 2686}
     - Class: 114
-      Script: {instanceID: 23932}
+      Script: {instanceID: 2834}
+    - Class: 114
+      Script: {instanceID: 4488}
+    - Class: 114
+      Script: {instanceID: 4708}
+    - Class: 114
+      Script: {instanceID: 4816}
+    - Class: 114
+      Script: {instanceID: 5712}
+    - Class: 114
+      Script: {instanceID: 6090}
+    - Class: 114
+      Script: {instanceID: 6204}
+    - Class: 114
+      Script: {instanceID: 7020}
+    - Class: 114
+      Script: {instanceID: 8082}
+    - Class: 114
+      Script: {instanceID: 23542}
+    - Class: 114
+      Script: {instanceID: 23550}
+    - Class: 114
+      Script: {instanceID: 24528}
     - Class: 115
       Script: {instanceID: 0}
     - Class: 124
@@ -73,6 +114,12 @@ ScriptsOnlyBuild:
     - Class: 157
       Script: {instanceID: 0}
     - Class: 196
+      Script: {instanceID: 0}
+    - Class: 222
+      Script: {instanceID: 0}
+    - Class: 223
+      Script: {instanceID: 0}
+    - Class: 224
       Script: {instanceID: 0}
   scriptHashData:
   - hash:
@@ -237,6 +284,12 @@ ScriptsOnlyBuild:
     assemblyName: Unity.VisualScripting.Core
     namespaceName: Unity.VisualScripting
     className: UnityMessageListener
+  - hash:
+      serializedVersion: 2
+      Hash: abb3e0d74b088a8dec761c946e279873
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: PanelScript
   - hash:
       serializedVersion: 2
       Hash: fce9b835d1e8b08e7ecea8da19f21986
@@ -503,10 +556,22 @@ ScriptsOnlyBuild:
     className: UnityOnCancelMessageListener
   - hash:
       serializedVersion: 2
+      Hash: b1c69679be1b74264f1ea6bb331e4b63
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: SimpleWallBuilder
+  - hash:
+      serializedVersion: 2
       Hash: 7e9cad7f71f9cc52f699bbd2d2a75734
     assemblyName: Unity.VisualScripting.Core
     namespaceName: Unity.VisualScripting
     className: UnityOnPointerClickMessageListener
+  - hash:
+      serializedVersion: 2
+      Hash: e7f9dc12d279f0ba5dde0b2aefb7599c
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: DoorTeleportSystem
   - hash:
       serializedVersion: 2
       Hash: 0b63f6d3335e11939ce8790b904c8691
@@ -653,10 +718,10 @@ ScriptsOnlyBuild:
     className: StateGraphAsset
   - hash:
       serializedVersion: 2
-      Hash: 310aca7a005bacf27c23cfe990811f74
+      Hash: 13ae641fc3df27848cbbb2c32f46cc69
     assemblyName: Assembly-CSharp
     namespaceName: 
-    className: TestMap
+    className: TwoRoomApartment
   - hash:
       serializedVersion: 2
       Hash: 540882762544409cc4530e60db00e951
@@ -687,6 +752,12 @@ ScriptsOnlyBuild:
     assemblyName: Unity.VisualScripting.Core
     namespaceName: Unity.VisualScripting
     className: UnityOnMouseUpAsButtonMessageListener
+  - hash:
+      serializedVersion: 2
+      Hash: 38a533b66e6803c9db555eb15e450f1d
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: ChangeView
   - hash:
       serializedVersion: 2
       Hash: 4f353524ce6564e40764f1ea080b2d85
@@ -953,10 +1024,16 @@ ScriptsOnlyBuild:
     className: GroundCheck
   - hash:
       serializedVersion: 2
-      Hash: 129eaec804ee60b5ec3892be1d06cb6e
+      Hash: c8c436fbacdcac1095367a681375f2eb
     assemblyName: Assembly-CSharp
     namespaceName: 
-    className: DoorTeleportSystem
+    className: PlayerSpawnManager
+  - hash:
+      serializedVersion: 2
+      Hash: 92cd04dbd31a21dab82f650465f06dce
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: SceneController
   platform: 20
   scenePathNames:
   - Assets/Scenes/SampleScene.unity

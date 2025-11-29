@@ -62,6 +62,13 @@ public class SimpleMapGenerator : MonoBehaviour
         public int wallIndex; // Индекс стены, на которой находится дверь
     }
 
+    // События для отслеживания состояния генерации
+    public System.Action OnMapGenerationStarted;
+    public System.Action OnMapGenerationCompleted;
+
+    // Флаг готовности карты
+    public bool IsMapReady { get; private set; } = false;
+
     void Start()
     {
         GenerateMap();
@@ -69,6 +76,9 @@ public class SimpleMapGenerator : MonoBehaviour
 
     public void GenerateMap()
     {
+        IsMapReady = false;
+        OnMapGenerationStarted?.Invoke();
+
         ClearMap();
 
         if (points == null || points.Length < 2)
@@ -86,6 +96,9 @@ public class SimpleMapGenerator : MonoBehaviour
 
         if (generateCeiling)
             CreateCeiling();
+
+        IsMapReady = true;
+        OnMapGenerationCompleted?.Invoke();
     }
 
     void CreateWalls()
@@ -228,6 +241,7 @@ public class SimpleMapGenerator : MonoBehaviour
         windowObj.name = $"Window_{windowIndex}_{segmentIndex}";
         windowObj.transform.parent = this.transform;
 
+        windowObj.tag = "Window";
         // Вычисляем позицию (середина между точками окна)
         // Окно размещается посередине стены по высоте
         Vector3 position = new Vector3(
@@ -559,7 +573,7 @@ public class SimpleMapGenerator : MonoBehaviour
         return sum / wallThicknesses.Length;
     }
 
-    float GetMaxHeight()
+    public float GetMaxHeight()
     {
         if (wallHeights == null || wallHeights.Length == 0)
             return defaultWallHeight;
@@ -572,7 +586,7 @@ public class SimpleMapGenerator : MonoBehaviour
         return max;
     }
 
-    Vector2 GetMinBounds()
+    public Vector2 GetMinBounds()
     {
         if (points == null || points.Length == 0) return Vector2.zero;
 
@@ -585,7 +599,7 @@ public class SimpleMapGenerator : MonoBehaviour
         return min;
     }
 
-    Vector2 GetMaxBounds()
+    public Vector2 GetMaxBounds()
     {
         if (points == null || points.Length == 0) return Vector2.zero;
 

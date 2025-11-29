@@ -7,6 +7,9 @@ public class DoorTeleportSystem : MonoBehaviour
     public float maxDistance = 3f;
     public LayerMask doorLayerMask = 1;
     public float teleportCooldown = 1f;
+    public float teleportDistance = 1.5f;
+    public float playerRadius = 0.5f;
+    public float heightCheck = 2f;
 
     [Header("Эффекты телепортации")]
     public ParticleSystem teleportEffect;
@@ -15,7 +18,7 @@ public class DoorTeleportSystem : MonoBehaviour
     private Camera playerCamera;
     private AudioSource audioSource;
     private bool canTeleport = true;
-    private SimpleMapGenerator mapGenerator;
+    private CharacterController characterController;
 
     void Start()
     {
@@ -31,11 +34,7 @@ public class DoorTeleportSystem : MonoBehaviour
             audioSource = gameObject.AddComponent<AudioSource>();
         }
 
-        mapGenerator = FindObjectOfType<SimpleMapGenerator>();
-        if (mapGenerator == null)
-        {
-            Debug.LogError("SimpleMapGenerator не найден на сцене!");
-        }
+        characterController = GetComponent<CharacterController>();
     }
 
     void Update()
@@ -64,73 +63,111 @@ public class DoorTeleportSystem : MonoBehaviour
 
     void TeleportPlayer(GameObject doorObject)
     {
-        if (mapGenerator == null || doorObject == null) return;
+        if (doorObject == null) return;
 
-        // Получаем позицию игрока
-        Vector3 playerPosition = transform.position;
-
-        // Получаем позицию телепортации (с противоположной стороны двери)
-        Vector3 teleportPosition = mapGenerator.GetExactTeleportPosition(doorObject, playerPosition);
-
-        // Проверяем и корректируем позицию
+        Vector3 teleportPosition = CalculateTeleportPosition(doorObject);
         Vector3 finalPosition = GetValidTeleportPosition(teleportPosition, doorObject);
 
         StartCoroutine(TeleportCoroutine(finalPosition, doorObject));
     }
 
+    Vector3 CalculateTeleportPosition(GameObject doorObject)
+    {
+        Vector3 playerPosition = transform.position;
+        Vector3 doorPosition = doorObject.transform.position;
+        Vector3 doorForward = doorObject.transform.forward;
+
+        // Определяем направление от игрока к двери
+        Vector3 toDoor = (doorPosition - playerPosition).normalized;
+
+        // Определяем, с какой стороны двери находится игрок
+        float dotProduct = Vector3.Dot(toDoor, doorForward);
+
+        // Телепортируем в противоположном направлении от текущей позиции игрока
+        Vector3 teleportDirection = (dotProduct > 0) ? -doorForward : doorForward;
+
+        // Вычисляем позицию телепортации
+        Vector3 teleportPosition = doorPosition + teleportDirection * teleportDistance;
+
+        // Сохраняем высоту игрока
+        teleportPosition.y = playerPosition.y;
+
+        return teleportPosition;
+    }
+
     Vector3 GetValidTeleportPosition(Vector3 desiredPosition, GameObject doorObject)
     {
         Vector3 doorForward = doorObject.transform.forward;
-        Vector3 doorPosition = doorObject.transform.position;
+        Vector3 doorRight = doorObject.transform.right;
 
-        // Пробуем желаемую позицию
+        // Проверяем основную позицию
         if (IsPositionValid(desiredPosition))
         {
             return desiredPosition;
         }
 
-        // Если желаемая позиция занята, пробуем варианты со смещением
+        // Пробуем разные смещения
         Vector3[] offsets = {
             Vector3.zero,
-            doorObject.transform.right * 0.5f,
-            -doorObject.transform.right * 0.5f,
-            doorObject.transform.right * 1.0f,
-            -doorObject.transform.right * 1.0f
+            doorRight * 0.5f,
+            -doorRight * 0.5f,
+            doorRight * 0.8f,
+            -doorRight * 0.8f,
+            (doorRight + doorForward * 0.3f) * 0.5f,
+            (-doorRight + doorForward * 0.3f) * 0.5f,
+            doorForward * 0.5f,
+            -doorForward * 0.5f
         };
 
-        foreach (Vector3 offset in offsets)
+        // Сначала проверяем близкие позиции
+        for (int i = 0; i < offsets.Length; i++)
         {
-            Vector3 testPosition = desiredPosition + offset;
+            Vector3 testPosition = desiredPosition + offsets[i];
             if (IsPositionValid(testPosition))
             {
                 return testPosition;
             }
         }
 
-        // Если все позиции заняты, возвращаем позицию с минимальным смещением
-        return desiredPosition + doorObject.transform.right * 0.5f;
+        // Если ничего не найдено, возвращаем желаемую позицию (будет предупреждение)
+        Debug.LogWarning("Не найдена валидная позиция для телепортации!");
+        return desiredPosition;
     }
 
     bool IsPositionValid(Vector3 position)
     {
-        // Проверяем коллизии на целевой позиции
-        Collider[] colliders = Physics.OverlapSphere(position, 0.4f); // Радиус немного меньше чем у игрока
+        // Проверяем коллизии с помощью CapsuleCast для более точного определения
+        Vector3 point1 = position + Vector3.up * 0.1f;
+        Vector3 point2 = position + Vector3.up * (heightCheck - 0.1f);
+
+        Collider[] colliders = Physics.OverlapCapsule(point1, point2, playerRadius);
+
         foreach (Collider collider in colliders)
         {
             // Игнорируем триггеры, двери и самого игрока
-            if (!collider.isTrigger &&
-                !collider.gameObject.name.StartsWith("Door_") &&
-                collider.gameObject != gameObject)
-            {
-                return false;
-            }
+            if (collider.isTrigger) continue;
+            if (collider.gameObject.name.StartsWith("Door_")) continue;
+            if (collider.gameObject == gameObject) continue;
+            if (collider.transform.IsChildOf(transform)) continue;
+
+            // Если нашли любой другой коллайдер - позиция невалидна
+            return false;
         }
+
         return true;
     }
 
     IEnumerator TeleportCoroutine(Vector3 targetPosition, GameObject doorObject)
     {
         canTeleport = false;
+
+        // Отключаем CharacterController на время телепортации если он есть
+        bool wasEnabled = false;
+        if (characterController != null)
+        {
+            wasEnabled = characterController.enabled;
+            characterController.enabled = false;
+        }
 
         // Эффекты перед телепортацией
         PlayTeleportEffects(transform.position);
@@ -140,6 +177,12 @@ public class DoorTeleportSystem : MonoBehaviour
 
         // Телепортируем игрока
         transform.position = targetPosition;
+
+        // Включаем CharacterController обратно
+        if (characterController != null && wasEnabled)
+        {
+            characterController.enabled = true;
+        }
 
         // Эффекты после телепортации
         PlayTeleportEffects(transform.position);
@@ -167,7 +210,6 @@ public class DoorTeleportSystem : MonoBehaviour
 
     void ShowTeleportMessage(GameObject doorObject)
     {
-        // Можно добавить UI-сообщение или логирование
         Debug.Log($"Телепортирован через дверь: {doorObject.name}");
     }
 

@@ -197,7 +197,7 @@ public class SimpleWallBuilder : MonoBehaviour
         if (Physics.Raycast(ray, out hit, maxDistance))
         {
             GameObject hitObject = hit.collider.gameObject;
-            if ((hitObject.name.StartsWith("Wall_") || (hitObject.CompareTag("Wall")) && hitObject != buildPreview) || hitObject.CompareTag("Door"))
+            if ((hitObject.name.StartsWith("Wall_") || (hitObject.CompareTag("Wall")) && hitObject != buildPreview) || hitObject.CompareTag("Door") || hitObject.CompareTag("Window"))
             {
                 currentTargetWall = hitObject;
             }
