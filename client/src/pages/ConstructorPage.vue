@@ -19,6 +19,8 @@
           <button :class="['chip', mode === 'addWall' && 'chip--active']" @click="setMode('addWall')">➕ Стена</button>
           <button :class="['chip', mode === 'removeWall' && 'chip--active']" @click="setMode('removeWall')">➖ Стена</button>
           <button :class="['chip', mode === 'furniture' && 'chip--active']" @click="setMode('furniture')">🪑 Мебель</button>
+          <button :class="['chip', mode === 'addWindow' && 'chip--active']" @click="setMode('addWindow')">🪟 Окно</button>
+          <button :class="['chip', mode === 'addDoor' && 'chip--active']" @click="setMode('addDoor')">🚪 Дверь</button>
           <span class="constructor__spacer"></span>
           <button class="chip" @click="resetView" :disabled="!attachedProject">⟲ Сброс вида</button>
           <button class="chip" @click="openAttach" v-if="!attachedProject">📎 Прикрепить проект</button>
@@ -55,6 +57,8 @@
         <div v-if="attachedProject" class="constructor__legend">
           <span class="legend legend--load">Несущая</span>
           <span class="legend legend--part">Перегородка</span>
+          <span class="legend legend--window">Окно</span>
+          <span class="legend legend--door">Дверь</span>
         </div>
       </div>
 
@@ -97,6 +101,8 @@ const viewMode = ref('top')
 const mode = ref('select')
 const addingWall = ref(null)
 const movingWall = ref(null)
+const addingWindow = ref(null)
+const addingDoor = ref(null)
 
 const geometry = ref(props.initialGeometry || { rooms: [] })
 const walls = ref(
@@ -105,6 +111,9 @@ const walls = ref(
     { id: 'W2', start: { x: 5, y: 0 }, end: { x: 5, y: 4 }, loadBearing: false, thickness: 0.12, wallType: 'перегородка' },
   ])
 )
+
+const windows = ref([])
+const doors = ref([])
 
 const attachedProject = ref(null)
 const availableProjects = ref([])
@@ -117,7 +126,12 @@ const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? Math.max(
 
 const canvasSize = computed(() => ({ w: 0, h: 0 }))
 
-const setMode = (m) => { mode.value = m; addingWall.value = null }
+const setMode = (m) => {
+  mode.value = m;
+  addingWall.value = null;
+  addingWindow.value = null;
+  addingDoor.value = null;
+}
 const setViewMode = (m) => { viewMode.value = m }
 const resetView = () => { view.x = 0; view.y = 0; view.scale = 60 }
 
@@ -141,6 +155,7 @@ const onWheel = (e) => {
 const onPointerDown = (e) => {
   const rect = e.currentTarget.getBoundingClientRect()
   const pt = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+
   if (mode.value === 'moveWall') {
     const w = nearestWall(pt)
     if (w) {
@@ -158,8 +173,10 @@ const onPointerDown = (e) => {
       return
     }
   }
+
   view.dragging = true; view.lastX = e.clientX; view.lastY = e.clientY
 }
+
 const onPointerMove = (e) => {
   if (movingWall.value) {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -189,6 +206,7 @@ const onPointerMove = (e) => {
   view.lastX = e.clientX
   view.lastY = e.clientY
 }
+
 const onPointerUp = () => { view.dragging = false; movingWall.value = null }
 
 const pinch = reactive({ active: false, startDist: 0, startScale: 0, cx: 0, cy: 0 })
@@ -265,6 +283,7 @@ const nearestWall = (pt) => {
 const onCanvasClick = (e) => {
   const rect = e.currentTarget.getBoundingClientRect()
   const pt = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+
   if (mode.value === 'select') {
     const w = nearestWall(pt)
     if (w) {
@@ -279,36 +298,91 @@ const onCanvasClick = (e) => {
     }
   } else if (mode.value === 'addWall') {
     const s = snap(pt)
-    if (!addingWall.value) { addingWall.value = { start: s } } else {
-      const nw = normalizeWall({ id: `W${Date.now()}`, start: addingWall.value.start, end: s, loadBearing: false, thickness: 0.12, wallType: 'перегородка' })
+    if (!addingWall.value) {
+      addingWall.value = { start: s }
+    } else {
+      const nw = normalizeWall({
+        id: `W${Date.now()}`,
+        start: addingWall.value.start,
+        end: s,
+        loadBearing: false,
+        thickness: 0.12,
+        wallType: 'перегородка'
+      })
       walls.value = [...walls.value, nw]
       addingWall.value = null
     }
   } else if (mode.value === 'removeWall') {
     const w = nearestWall(pt)
     if (w) walls.value = walls.value.filter((x) => x.id !== w.id)
+  } else if (mode.value === 'addWindow') {
+    const w = nearestWall(pt)
+    if (w) {
+      const wallIndex = walls.value.findIndex(wall => wall.id === w.id)
+      if (wallIndex !== -1) {
+        // Создаем окно посередине стены
+        const midX = (w.start.x + w.end.x) / 2
+        const midY = (w.start.y + w.end.y) / 2
+        const windowWidth = 1.0
+
+        windows.value.push({
+          id: `WIN${Date.now()}`,
+          wallIndex: wallIndex,
+          position: { x: midX, y: midY },
+          width: windowWidth,
+          height: 1.0,
+          points: [
+            { x: midX - windowWidth/2, y: midY },
+            { x: midX + windowWidth/2, y: midY }
+          ]
+        })
+      }
+    }
+  } else if (mode.value === 'addDoor') {
+    const w = nearestWall(pt)
+    if (w) {
+      const wallIndex = walls.value.findIndex(wall => wall.id === w.id)
+      if (wallIndex !== -1) {
+        // Создаем дверь посередине стены
+        const midX = (w.start.x + w.end.x) / 2
+        const midY = (w.start.y + w.end.y) / 2
+        const doorWidth = 0.8
+
+        doors.value.push({
+          id: `DR${Date.now()}`,
+          wallIndex: wallIndex,
+          position: { x: midX, y: midY },
+          width: doorWidth,
+          height: 2.0,
+          points: [
+            { x: midX - doorWidth/2, y: midY },
+            { x: midX + doorWidth/2, y: midY }
+          ]
+        })
+      }
+    }
   }
 }
 
 // Функция для вычисления прямоугольника стены на основе двух параллельных линий
 const calculateWallRectangle = (wall) => {
   const { start, end, thickness } = wall
-  
+
   // Вычисляем направление стены
   const dx = end.x - start.x
   const dy = end.y - start.y
   const length = Math.sqrt(dx * dx + dy * dy)
-  
+
   if (length === 0) return null
-  
+
   // Нормализованный перпендикулярный вектор
   const perpX = -dy / length
   const perpY = dx / length
-  
+
   // Смещение для толщины стены
   const offsetX = perpX * thickness / 2
   const offsetY = perpY * thickness / 2
-  
+
   // Четыре угла прямоугольника стены
   return {
     p1: { x: start.x + offsetX, y: start.y + offsetY },
@@ -324,21 +398,21 @@ const draw = () => {
     requestAnimationFrame(draw)
     return
   }
-  
+
   const parent = c.parentElement
   if (!parent) {
     requestAnimationFrame(draw)
     return
   }
-  
+
   const wCSS = parent.clientWidth
   const hCSS = parent.clientHeight
-  
+
   if (wCSS === 0 || hCSS === 0) {
     requestAnimationFrame(draw)
     return
   }
-  
+
   if (!attachedProject.value) {
     const needResize = c.width !== Math.floor(wCSS * dpr) || c.height !== Math.floor(hCSS * dpr)
     if (needResize) {
@@ -355,15 +429,15 @@ const draw = () => {
     requestAnimationFrame(draw)
     return
   }
-  
+
   const needResize = c.width !== Math.floor(wCSS * dpr) || c.height !== Math.floor(hCSS * dpr)
-  if (needResize) { 
+  if (needResize) {
     c.width = Math.floor(wCSS * dpr)
     c.height = Math.floor(hCSS * dpr)
     c.style.width = wCSS + 'px'
     c.style.height = hCSS + 'px'
   }
-  
+
   const ctx = c.getContext('2d')
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, wCSS, hCSS)
@@ -431,69 +505,200 @@ const draw = () => {
       ctx.fillStyle = 'rgba(255, 215, 0, 0.8)' // Желтый для перегородок
       ctx.strokeStyle = '#ffd700'
     }
-    
+
     ctx.fill()
     ctx.stroke()
+  }
+
+  // Рисуем окна
+  for (const window of windows.value) {
+    const wall = walls.value[window.wallIndex]
+    if (!wall) continue
+
+    const p1 = worldToScreen(window.points[0].x, window.points[0].y)
+    const p2 = worldToScreen(window.points[1].x, window.points[1].y)
+
+    ctx.beginPath()
+    ctx.moveTo(p1.sx, p1.sy)
+    ctx.lineTo(p2.sx, p2.sy)
+    ctx.strokeStyle = '#4fc3f7'
+    ctx.lineWidth = 3
+    ctx.stroke()
+    ctx.lineWidth = 1
+  }
+
+  // Рисуем двери
+  for (const door of doors.value) {
+    const wall = walls.value[door.wallIndex]
+    if (!wall) continue
+
+    const p1 = worldToScreen(door.points[0].x, door.points[0].y)
+    const p2 = worldToScreen(door.points[1].x, door.points[1].y)
+
+    ctx.beginPath()
+    ctx.moveTo(p1.sx, p1.sy)
+    ctx.lineTo(p2.sx, p2.sy)
+    ctx.strokeStyle = '#8bc34a'
+    ctx.lineWidth = 3
+    ctx.stroke()
+    ctx.lineWidth = 1
+
+    // Рисуем дугу для двери
+    const midX = (p1.sx + p2.sx) / 2
+    const midY = (p1.sy + p2.sy) / 2
+    const radius = Math.hypot(p2.sx - p1.sx, p2.sy - p1.sy) / 2
+
+    ctx.beginPath()
+    ctx.arc(midX, midY, radius, 0, Math.PI, true)
+    ctx.strokeStyle = '#8bc34a'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.lineWidth = 1
   }
 
   requestAnimationFrame(draw)
 }
 
-// Функция для преобразования данных в формат для Unity
+// Улучшенная функция для преобразования данных в формат для Unity
 const prepareUnityData = () => {
   if (!attachedProject.value) return null
 
   // Собираем все уникальные точки из стен
   const allPoints = []
   const pointMap = new Map()
+  const wallSegments = []
 
-  walls.value.forEach(wall => {
+  // Собираем точки и создаем сегменты стен
+  walls.value.forEach((wall, wallIndex) => {
     const startKey = `${wall.start.x},${wall.start.y}`
     const endKey = `${wall.end.x},${wall.end.y}`
 
+    let startIndex, endIndex
+
     if (!pointMap.has(startKey)) {
-      pointMap.set(startKey, allPoints.length)
+      startIndex = allPoints.length
+      pointMap.set(startKey, startIndex)
       allPoints.push({ x: wall.start.x, y: wall.start.y })
+    } else {
+      startIndex = pointMap.get(startKey)
     }
 
     if (!pointMap.has(endKey)) {
-      pointMap.set(endKey, allPoints.length)
+      endIndex = allPoints.length
+      pointMap.set(endKey, endIndex)
       allPoints.push({ x: wall.end.x, y: wall.end.y })
+    } else {
+      endIndex = pointMap.get(endKey)
     }
+
+    wallSegments.push({
+      startIndex,
+      endIndex,
+      wallIndex,
+      points: [wall.start, wall.end]
+    })
   })
 
-  // Создаем connections (индексы точек)
+  // Создаем connections в правильном формате [0,1, 1,2, 2,3, 3,0]
   const connections = []
-  walls.value.forEach(wall => {
-    const startKey = `${wall.start.x},${wall.start.y}`
-    const endKey = `${wall.end.x},${wall.end.y}`
-
-    const startIndex = pointMap.get(startKey)
-    const endIndex = pointMap.get(endKey)
-
-    connections.push(startIndex, endIndex)
+  wallSegments.forEach(segment => {
+    connections.push(segment.startIndex, segment.endIndex)
   })
 
-  // Высота стен (по умолчанию 2.5м)
+  // Высоты и толщины стен
   const wallHeights = walls.value.map(() => 2.5)
-
-  // Толщина стен из данных
   const wallThicknesses = walls.value.map(wall => wall.thickness || 0.2)
 
-  // Окна и двери (пока пустые массивы, можно расширить функционал)
-  const windows = []
-  const doors = []
+  // Подготавливаем окна для Unity
+  const unityWindows = windows.value.map(win => {
+    const wall = walls.value[win.wallIndex]
+    if (!wall) return null
+
+    // Вычисляем точки окна на основе позиции и ширины
+    const wallVector = {
+      x: wall.end.x - wall.start.x,
+      y: wall.end.y - wall.start.y
+    }
+    const wallLength = Math.sqrt(wallVector.x * wallVector.x + wallVector.y * wallVector.y)
+    const normalizedWallVector = {
+      x: wallVector.x / wallLength,
+      y: wallVector.y / wallLength
+    }
+
+    const startOffset = {
+      x: wall.start.x + normalizedWallVector.x * (win.position.x - wall.start.x),
+      y: wall.start.y + normalizedWallVector.y * (win.position.y - wall.start.y)
+    }
+
+    const windowPoints = [
+      {
+        x: startOffset.x - normalizedWallVector.x * (win.width / 2),
+        y: startOffset.y - normalizedWallVector.y * (win.width / 2)
+      },
+      {
+        x: startOffset.x + normalizedWallVector.x * (win.width / 2),
+        y: startOffset.y + normalizedWallVector.y * (win.width / 2)
+      }
+    ]
+
+    return {
+      points: windowPoints,
+      connections: [0, 1],
+      height: win.height,
+      wallIndex: win.wallIndex
+    }
+  }).filter(win => win !== null)
+
+  // Подготавливаем двери для Unity
+  const unityDoors = doors.value.map(door => {
+    const wall = walls.value[door.wallIndex]
+    if (!wall) return null
+
+    // Вычисляем точки двери на основе позиции и ширины
+    const wallVector = {
+      x: wall.end.x - wall.start.x,
+      y: wall.end.y - wall.start.y
+    }
+    const wallLength = Math.sqrt(wallVector.x * wallVector.x + wallVector.y * wallVector.y)
+    const normalizedWallVector = {
+      x: wallVector.x / wallLength,
+      y: wallVector.y / wallLength
+    }
+
+    const startOffset = {
+      x: wall.start.x + normalizedWallVector.x * (door.position.x - wall.start.x),
+      y: wall.start.y + normalizedWallVector.y * (door.position.y - wall.start.y)
+    }
+
+    const doorPoints = [
+      {
+        x: startOffset.x - normalizedWallVector.x * (door.width / 2),
+        y: startOffset.y - normalizedWallVector.y * (door.width / 2)
+      },
+      {
+        x: startOffset.x + normalizedWallVector.x * (door.width / 2),
+        y: startOffset.y + normalizedWallVector.y * (door.width / 2)
+      }
+    ]
+
+    return {
+      points: doorPoints,
+      connections: [0, 1],
+      height: door.height,
+      wallIndex: door.wallIndex
+    }
+  }).filter(door => door !== null)
 
   const unityData = {
     points: allPoints,
     connections: connections,
     wallHeights: wallHeights,
     wallThicknesses: wallThicknesses,
-    windows: windows,
-    doors: doors
+    windows: unityWindows,
+    doors: unityDoors
   }
 
-  console.log('[Unity] Prepared data for Unity:', unityData)
+  console.log('[Unity] Enhanced data prepared:', unityData)
   return unityData
 }
 
@@ -744,6 +949,10 @@ const attachSelected = () => {
   geometry.value = p.geometry || { rooms: [] }
   const initialWalls = Array.isArray(p.walls) ? p.walls : []
 
+  // Сбрасываем окна и двери при смене проекта
+  windows.value = []
+  doors.value = []
+
   if (initialWalls.length) {
     // Нормализуем существующие стены
     walls.value = initialWalls.map(normalizeWall).filter(w => w !== null)
@@ -779,9 +988,15 @@ const attachSelected = () => {
 }
 
 const cancelSelecting = () => { isSelecting.value = false; selectedProjectId.value = null }
-const changeAttachment = () => { attachedProject.value = null; isSelecting.value = false; selectedProjectId.value = null }
+const changeAttachment = () => {
+  attachedProject.value = null;
+  isSelecting.value = false;
+  selectedProjectId.value = null;
+  windows.value = [];
+  doors.value = [];
+}
 
-watch([geometry, walls], () => {
+watch([geometry, walls, windows, doors], () => {
   if (unityConnected.value) {
     // Автоматически обновляем Unity при изменении геометрии
     setTimeout(() => {
@@ -862,6 +1077,8 @@ watch(selectedProjectId, (val) => {
 .legend { font-size: 12px; color: #c7d3ff; }
 .legend--load { color: #ff4444; }
 .legend--part { color: #ffd700; }
+.legend--window { color: #4fc3f7; }
+.legend--door { color: #8bc34a; }
 .unity__host { position: relative; height: clamp(340px, 55vh, 520px); display: grid; place-items: center; padding: 8px; }
 .unity__placeholder { text-align: center; color: #c7cbe0; }
 .unity__connected { text-align: center; color: #8ef59b; }
