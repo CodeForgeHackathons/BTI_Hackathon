@@ -290,10 +290,37 @@ const onCanvasClick = (e) => {
   }
 }
 
+// Функция для вычисления прямоугольника стены на основе двух параллельных линий
+const calculateWallRectangle = (wall) => {
+  const { start, end, thickness } = wall
+  
+  // Вычисляем направление стены
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const length = Math.sqrt(dx * dx + dy * dy)
+  
+  if (length === 0) return null
+  
+  // Нормализованный перпендикулярный вектор
+  const perpX = -dy / length
+  const perpY = dx / length
+  
+  // Смещение для толщины стены
+  const offsetX = perpX * thickness / 2
+  const offsetY = perpY * thickness / 2
+  
+  // Четыре угла прямоугольника стены
+  return {
+    p1: { x: start.x + offsetX, y: start.y + offsetY },
+    p2: { x: start.x - offsetX, y: start.y - offsetY },
+    p3: { x: end.x - offsetX, y: end.y - offsetY },
+    p4: { x: end.x + offsetX, y: end.y + offsetY }
+  }
+}
+
 const draw = () => {
   const c = canvas2d.value
   if (!c) {
-    // Канвас еще не создан, продолжаем попытки
     requestAnimationFrame(draw)
     return
   }
@@ -308,12 +335,10 @@ const draw = () => {
   const hCSS = parent.clientHeight
   
   if (wCSS === 0 || hCSS === 0) {
-    // Родитель еще не имеет размеров
     requestAnimationFrame(draw)
     return
   }
   
-  // Если проект не прикреплен, все равно рисуем пустой канвас
   if (!attachedProject.value) {
     const needResize = c.width !== Math.floor(wCSS * dpr) || c.height !== Math.floor(hCSS * dpr)
     if (needResize) {
@@ -330,14 +355,22 @@ const draw = () => {
     requestAnimationFrame(draw)
     return
   }
+  
   const needResize = c.width !== Math.floor(wCSS * dpr) || c.height !== Math.floor(hCSS * dpr)
-  if (needResize) { c.width = Math.floor(wCSS * dpr); c.height = Math.floor(hCSS * dpr); c.style.width = wCSS + 'px'; c.style.height = hCSS + 'px' }
+  if (needResize) { 
+    c.width = Math.floor(wCSS * dpr)
+    c.height = Math.floor(hCSS * dpr)
+    c.style.width = wCSS + 'px'
+    c.style.height = hCSS + 'px'
+  }
+  
   const ctx = c.getContext('2d')
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, wCSS, hCSS)
   ctx.fillStyle = '#0f1324'
   ctx.fillRect(0, 0, wCSS, hCSS)
 
+  // Сетка
   ctx.strokeStyle = '#1f2540'
   ctx.lineWidth = 1
   ctx.lineCap = 'round'
@@ -355,6 +388,7 @@ const draw = () => {
     ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(wCSS, sy); ctx.stroke()
   }
 
+  // Рисуем комнаты
   for (const room of geometry.value.rooms || []) {
     const verts = room.vertices || []
     if (!verts.length) continue
@@ -372,14 +406,33 @@ const draw = () => {
     ctx.stroke()
   }
 
-  for (const wline of walls.value) {
-    const a = worldToScreen(wline.start.x, wline.start.y)
-    const b = worldToScreen(wline.end.x, wline.end.y)
-    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy)
-    // Тонкие линии: минимальная толщина 1.5px, максимальная 2.5px
-    ctx.lineWidth = Math.max(1.5, Math.min(2.5, wline.thickness * view.scale * 0.5))
-    // Красный для несущих, желтый для ненесущих
-    ctx.strokeStyle = wline.loadBearing ? '#ff4444' : '#ffd700'
+  // Рисуем стены как прямоугольники
+  for (const wall of walls.value) {
+    const rect = calculateWallRectangle(wall)
+    if (!rect) continue
+
+    const p1 = worldToScreen(rect.p1.x, rect.p1.y)
+    const p2 = worldToScreen(rect.p2.x, rect.p2.y)
+    const p3 = worldToScreen(rect.p3.x, rect.p3.y)
+    const p4 = worldToScreen(rect.p4.x, rect.p4.y)
+
+    ctx.beginPath()
+    ctx.moveTo(p1.sx, p1.sy)
+    ctx.lineTo(p2.sx, p2.sy)
+    ctx.lineTo(p3.sx, p3.sy)
+    ctx.lineTo(p4.sx, p4.sy)
+    ctx.closePath()
+
+    // Заливка в зависимости от типа стены
+    if (wall.loadBearing) {
+      ctx.fillStyle = 'rgba(255, 68, 68, 0.8)' // Красный для несущих
+      ctx.strokeStyle = '#ff4444'
+    } else {
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.8)' // Желтый для перегородок
+      ctx.strokeStyle = '#ffd700'
+    }
+    
+    ctx.fill()
     ctx.stroke()
   }
 
@@ -508,46 +561,74 @@ const normalizeWall = (wall) => {
   }
 }
 
+// Улучшенная функция построения стен из геометрии - убирает дублирование
 const buildWallsFromGeometry = (geom) => {
   const out = []
   if (!geom || !Array.isArray(geom.rooms)) return out
   
-  // Используем Set для отслеживания уникальных стен (чтобы избежать дублирования)
-  const wallSet = new Set()
+  // Собираем все сегменты стен из всех комнат
+  const allSegments = []
   
   for (const room of geom.rooms) {
     const verts = Array.isArray(room.vertices) ? room.vertices : []
-    
-    // Объединяем близкие точки перед построением стен
     const mergedVerts = mergeCloseVertices(verts)
     
     for (let i = 0; i < mergedVerts.length; i++) {
       const a = mergedVerts[i]
       const b = mergedVerts[(i + 1) % mergedVerts.length]
       
-      // Создаем уникальный ключ для стены (в обоих направлениях)
-      const key1 = `${a.x},${a.y}-${b.x},${b.y}`
-      const key2 = `${b.x},${b.y}-${a.x},${a.y}`
-      
-      // Проверяем, не существует ли уже такая стена
-      if (!wallSet.has(key1) && !wallSet.has(key2)) {
-        wallSet.add(key1)
-        
-        // Определяем тип стены: внешние стены - несущие, внутренние - перегородки
-        // Простая эвристика: если стена принадлежит только одной комнате - вероятно внешняя
-        const isExternal = true // В реальном приложении нужно анализировать соседние комнаты
-        
-        out.push({ 
-          id: `G${room.id || 'R'}_${i}`, 
-          start: { x: a.x, y: a.y }, 
-          end: { x: b.x, y: b.y }, 
-          loadBearing: isExternal, // Внешние стены - несущие
-          thickness: isExternal ? 0.2 : 0.12, 
-          wallType: isExternal ? 'несущая' : 'перегородка' 
-        })
+      // Создаем сегмент с нормализованными координатами (всегда от меньшей к большей)
+      const segment = {
+        start: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y) },
+        end: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y) },
+        roomId: room.id
       }
+      
+      allSegments.push(segment)
     }
   }
+  
+  // Группируем сегменты по координатам для нахождения общих стен
+  const segmentMap = new Map()
+  
+  for (const segment of allSegments) {
+    const key = `${segment.start.x},${segment.start.y}-${segment.end.x},${segment.end.y}`
+    
+    if (!segmentMap.has(key)) {
+      segmentMap.set(key, {
+        segment,
+        count: 1,
+        rooms: new Set([segment.roomId])
+      })
+    } else {
+      const existing = segmentMap.get(key)
+      existing.count++
+      existing.rooms.add(segment.roomId)
+    }
+  }
+  
+  // Создаем стены на основе сегментов
+  let wallId = 1
+  for (const [key, data] of segmentMap.entries()) {
+    const { segment, count, rooms } = data
+    
+    // Если сегмент встречается только в одной комнате - это внешняя стена (несущая)
+    // Если в двух и более комнатах - это внутренняя стена (перегородка)
+    const isExternal = count === 1
+    const isLoadBearing = isExternal
+    
+    out.push({
+      id: `GW${wallId++}`,
+      start: segment.start,
+      end: segment.end,
+      loadBearing: isLoadBearing,
+      thickness: isLoadBearing ? 0.2 : 0.12,
+      wallType: isLoadBearing ? 'несущая' : 'перегородка',
+      rooms: Array.from(rooms)
+    })
+  }
+  
+  console.log(`[Geometry] Built ${out.length} walls from ${allSegments.length} segments (${out.filter(w => w.loadBearing).length} load-bearing)`)
   return out
 }
 
