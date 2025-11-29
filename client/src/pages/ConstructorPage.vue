@@ -337,8 +337,14 @@ const openAttach = async () => {
   }
 
   try {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('homeplanner3d:projectsFilter', 'legal')
+      }
+    } catch {}
     const data = await graphqlRequest(GET_USER_PROJECTS_QUERY, { user_id: String(userId) })
     const projects = Array.isArray(data?.getUserProjects) ? data.getUserProjects : []
+    try { console.log('[Attach] userId=', userId, 'filter=legal', 'projects count=', projects.length, 'statuses=', projects.map(p=>p.status)) } catch {}
     availableProjects.value = projects
   } catch (e) {
     console.warn('Не удалось загрузить проекты пользователя:', e)
@@ -352,8 +358,8 @@ const openAttach = async () => {
 const isAttachableStatus = (st) => {
   if (!st) return false
   const s = String(st).toLowerCase()
-  const allow = ['allowed','ready','approved','active','ok','success','done','доступно','разрешено','готово']
-  const deny = ['forbid','forbidden','denied','blocked','ban','pending','processing','error','failed','archiv','delete','draft','нельзя','запрещ','ожид', 'обработ']
+  const allow = ['allowed','ready','approved','active','ok','success','done','доступно','разрешено','готово','можно','можно при услов']
+  const deny = ['forbid','forbidden','denied','blocked','ban','pending','processing','error','failed','archiv','delete','draft','нельзя','запрещ','ожид','обработ','не может быть одобрен']
   if (deny.some((k) => s.includes(k))) return false
   if (allow.some((k) => s.includes(k))) return true
   return false

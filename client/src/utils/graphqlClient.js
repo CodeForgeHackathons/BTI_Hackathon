@@ -24,18 +24,21 @@ export async function graphqlRequest(query, variables = {}) {
     let userIdHeader = null;
     let yandexApiKeyHeader = null;
     let onlyApprovedHeader = null;
+    let projectsFilterHeader = null;
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         token = window.localStorage.getItem('authToken');
         userIdHeader = window.localStorage.getItem('homeplanner3d:userId');
         yandexApiKeyHeader = window.localStorage.getItem('homeplanner3d:yandexAPIKey');
         onlyApprovedHeader = window.localStorage.getItem('homeplanner3d:onlyApproved');
+        projectsFilterHeader = window.localStorage.getItem('homeplanner3d:projectsFilter');
       }
     } catch {
       token = null;
       userIdHeader = null;
       yandexApiKeyHeader = null;
       onlyApprovedHeader = null;
+      projectsFilterHeader = null;
     }
 
     const headers = {
@@ -54,6 +57,9 @@ export async function graphqlRequest(query, variables = {}) {
     }
     if (onlyApprovedHeader) {
       headers['X-Only-Approved'] = String(onlyApprovedHeader);
+    }
+    if (projectsFilterHeader) {
+      headers['X-Projects-Filter'] = String(projectsFilterHeader);
     }
     
     // Формируем тело запроса в стандартном GraphQL формате
@@ -269,6 +275,29 @@ export const CREATE_PLANNING_PROJECT_MUTATION = `
     }
   }
 `;
+
+export const GET_USER_PROJECTS_QUERY = `
+  query GetUserProjects($userID: ID!) {
+    getUserProjects(userID: $userID) {
+      id
+      status
+      createdAt
+      plan { address area source }
+    }
+  }
+`;
+
+export async function getLegalUserProjects(userID) {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('homeplanner3d:userId', String(userID));
+      window.localStorage.setItem('homeplanner3d:projectsFilter', 'legal');
+      window.localStorage.removeItem('homeplanner3d:onlyApproved');
+    }
+  } catch {}
+  const data = await graphqlRequest(GET_USER_PROJECTS_QUERY, { userID: String(userID) });
+  return data?.getUserProjects ?? [];
+}
 
 /**
  * Запрос к BTI агенту (передаём данные проекта текстом)

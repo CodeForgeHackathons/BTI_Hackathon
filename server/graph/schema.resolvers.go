@@ -308,6 +308,12 @@ func (r *queryResolver) GetUserProjects(ctx context.Context, userID string) ([]*
     if _, err := fmt.Sscanf(userID, "%d", &uid); err != nil {
         return nil, fmt.Errorf("неверный формат ID пользователя")
     }
+    projectsFilter := ""
+    if v := ctx.Value("projectsFilter"); v != nil {
+        if s, ok := v.(string); ok {
+            projectsFilter = strings.ToLower(strings.TrimSpace(s))
+        }
+    }
     onlyApproved := false
     if v := ctx.Value("onlyApproved"); v != nil {
         if s, ok := v.(string); ok {
@@ -316,21 +322,53 @@ func (r *queryResolver) GetUserProjects(ctx context.Context, userID string) ([]*
             }
         }
     }
-    q := r.DB.Where("user_id = ?", uid)
-    if onlyApproved {
-        q = q.Where("status = ?", "можно")
-    }
-    if err := q.Order("created_at DESC").Find(&dbProjects).Error; err != nil {
+    if err := r.DB.Where("user_id = ?", uid).
+        Preload("Rooms").
+        Preload("Rooms.Vertices").
+        Preload("Walls").
+        Preload("Constraints").
+        Order("created_at DESC").
+        Find(&dbProjects).Error; err != nil {
         return nil, fmt.Errorf("ошибка при поиске проектов: %w", err)
     }
+    log.Printf("GetUserProjects: uid=%d filter=%s onlyApproved=%v total=%d", uid, projectsFilter, onlyApproved, len(dbProjects))
 
 	// Конвертируем в GraphQL модели
-	var graphQLProjects []*model.PlanningProject
-	for i := range dbProjects {
-		graphQLProjects = append(graphQLProjects, ConvertDbProjectToGraph(&dbProjects[i]))
-	}
+    var graphQLProjects []*model.PlanningProject
+    for i := range dbProjects {
+        st := strings.ToLower(strings.TrimSpace(dbProjects[i].Status))
 
-	return graphQLProjects, nil
+        isApproved := st == "можно"
+        isLegal := isApproved || strings.Contains(st, "можно при услов")
+        isProhibited := strings.Contains(st, "нельзя") || strings.Contains(st, "запрещ") || strings.Contains(st, "не может быть одобрен")
+        isPending := st == "pending" || st == ""
+
+        if projectsFilter == "approved" || onlyApproved {
+            if !isApproved {
+                continue
+            }
+        } else if projectsFilter == "legal" {
+            if !isLegal {
+                continue
+            }
+        }
+        if isProhibited || isPending {
+            if projectsFilter != "legal" && projectsFilter != "approved" && !onlyApproved {
+                // без фильтра возвращаем все, но исключим ярые pending? оставим как есть
+            }
+        }
+        graphQLProjects = append(graphQLProjects, ConvertDbProjectToGraph(&dbProjects[i]))
+    }
+    if len(graphQLProjects) > 0 {
+        sample := make([]string, 0, len(graphQLProjects))
+        for i := 0; i < len(graphQLProjects) && i < 10; i++ {
+            sample = append(sample, graphQLProjects[i].Status)
+        }
+        log.Printf("GetUserProjects: returning=%d statuses=%v", len(graphQLProjects), sample)
+    } else {
+        log.Printf("GetUserProjects: returning=0")
+    }
+    return graphQLProjects, nil
 }
 
 // Mutation returns MutationResolver implementation.

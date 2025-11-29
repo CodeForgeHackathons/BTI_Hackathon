@@ -57,9 +57,11 @@ func withUserIDContext(h http.Handler) http.Handler {
         uid := r.Header.Get("X-User-Id")
         apiKey := r.Header.Get("X-Yandex-Api-Key")
         onlyApproved := r.Header.Get("X-Only-Approved")
+        projectsFilter := r.Header.Get("X-Projects-Filter")
         ctx := context.WithValue(r.Context(), "userID", uid)
         ctx = context.WithValue(ctx, "yandexAPIKey", apiKey)
         ctx = context.WithValue(ctx, "onlyApproved", onlyApproved)
+        ctx = context.WithValue(ctx, "projectsFilter", projectsFilter)
         h.ServeHTTP(w, r.WithContext(ctx))
     })
 }
