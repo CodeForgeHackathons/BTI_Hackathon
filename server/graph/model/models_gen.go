@@ -2,11 +2,6 @@
 
 package model
 
-type BtiAgent struct {
-	ID     string `json:"id"`
-	Prompt string `json:"prompt"`
-}
-
 type Constraints struct {
 	ForbiddenMoves []string `json:"forbiddenMoves,omitempty"`
 	RegionRules    []string `json:"regionRules,omitempty"`

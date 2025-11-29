@@ -94,7 +94,8 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		GetUser func(childComplexity int, id string) int
+		GetUser        func(childComplexity int, id string) int
+		GetUserProject func(childComplexity int, projectID string, userID string) int
 	}
 
 	Room struct {
@@ -138,6 +139,7 @@ type MutationResolver interface {
 }
 type QueryResolver interface {
 	GetUser(ctx context.Context, id string) (*model.User, error)
+	GetUserProject(ctx context.Context, projectID string, userID string) (*model.PlanningProject, error)
 }
 
 type executableSchema struct {
@@ -354,6 +356,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.GetUser(childComplexity, args["id"].(string)), true
+	case "Query.getUserProject":
+		if e.complexity.Query.GetUserProject == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getUserProject_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetUserProject(childComplexity, args["project_id"].(string), args["user_id"].(string)), true
 
 	case "Room.height":
 		if e.complexity.Room.Height == nil {
@@ -482,7 +495,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
-		ec.unmarshalInputBTI_agent,
 		ec.unmarshalInputConstraintsInput,
 		ec.unmarshalInputGeometryInput,
 		ec.unmarshalInputPlanFileInput,
@@ -639,6 +651,22 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getUserProject_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "project_id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["project_id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "user_id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["user_id"] = arg1
 	return args, nil
 }
 
@@ -1686,6 +1714,65 @@ func (ec *executionContext) fieldContext_Query_getUser(ctx context.Context, fiel
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_getUser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getUserProject(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_getUserProject,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().GetUserProject(ctx, fc.Args["project_id"].(string), fc.Args["user_id"].(string))
+		},
+		nil,
+		ec.marshalNPlanningProject2ᚖServerBTIᚋgraphᚋmodelᚐPlanningProject,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_getUserProject(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_PlanningProject_id(ctx, field)
+			case "status":
+				return ec.fieldContext_PlanningProject_status(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_PlanningProject_createdAt(ctx, field)
+			case "clientTimestamp":
+				return ec.fieldContext_PlanningProject_clientTimestamp(ctx, field)
+			case "plan":
+				return ec.fieldContext_PlanningProject_plan(ctx, field)
+			case "geometry":
+				return ec.fieldContext_PlanningProject_geometry(ctx, field)
+			case "walls":
+				return ec.fieldContext_PlanningProject_walls(ctx, field)
+			case "constraints":
+				return ec.fieldContext_PlanningProject_constraints(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PlanningProject", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getUserProject_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -3815,40 +3902,6 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
-func (ec *executionContext) unmarshalInputBTI_agent(ctx context.Context, obj any) (model.BtiAgent, error) {
-	var it model.BtiAgent
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"id", "prompt"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "id":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
-			data, err := ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ID = data
-		case "prompt":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("prompt"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Prompt = data
-		}
-	}
-
-	return it, nil
-}
-
 func (ec *executionContext) unmarshalInputConstraintsInput(ctx context.Context, obj any) (model.ConstraintsInput, error) {
 	var it model.ConstraintsInput
 	asMap := map[string]any{}
@@ -4730,6 +4783,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getUserProject":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getUserProject(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -5368,7 +5443,7 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	res := graphql.MarshalBoolean(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5384,7 +5459,7 @@ func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.S
 	res := graphql.MarshalFloatContext(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return graphql.WrapContextMarshaler(ctx, res)
@@ -5393,7 +5468,7 @@ func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.S
 func (ec *executionContext) marshalNGeometry2ᚖServerBTIᚋgraphᚋmodelᚐGeometry(ctx context.Context, sel ast.SelectionSet, v *model.Geometry) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5415,7 +5490,7 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 	res := graphql.MarshalID(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5424,7 +5499,7 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 func (ec *executionContext) marshalNPlan2ᚖServerBTIᚋgraphᚋmodelᚐPlan(ctx context.Context, sel ast.SelectionSet, v *model.Plan) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5443,7 +5518,7 @@ func (ec *executionContext) marshalNPlanningProject2ServerBTIᚋgraphᚋmodelᚐ
 func (ec *executionContext) marshalNPlanningProject2ᚖServerBTIᚋgraphᚋmodelᚐPlanningProject(ctx context.Context, sel ast.SelectionSet, v *model.PlanningProject) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5507,7 +5582,7 @@ func (ec *executionContext) marshalNRoom2ᚕᚖServerBTIᚋgraphᚋmodelᚐRoom�
 func (ec *executionContext) marshalNRoom2ᚖServerBTIᚋgraphᚋmodelᚐRoom(ctx context.Context, sel ast.SelectionSet, v *model.Room) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5544,7 +5619,7 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5557,7 +5632,7 @@ func (ec *executionContext) marshalNUser2ServerBTIᚋgraphᚋmodelᚐUser(ctx co
 func (ec *executionContext) marshalNUser2ᚖServerBTIᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5611,7 +5686,7 @@ func (ec *executionContext) marshalNVertex2ᚕᚖServerBTIᚋgraphᚋmodelᚐVer
 func (ec *executionContext) marshalNVertex2ᚖServerBTIᚋgraphᚋmodelᚐVertex(ctx context.Context, sel ast.SelectionSet, v *model.Vertex) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5685,7 +5760,7 @@ func (ec *executionContext) marshalNWall2ᚕᚖServerBTIᚋgraphᚋmodelᚐWall�
 func (ec *executionContext) marshalNWall2ᚖServerBTIᚋgraphᚋmodelᚐWall(ctx context.Context, sel ast.SelectionSet, v *model.Wall) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5695,7 +5770,7 @@ func (ec *executionContext) marshalNWall2ᚖServerBTIᚋgraphᚋmodelᚐWall(ctx
 func (ec *executionContext) marshalNWallEnd2ᚖServerBTIᚋgraphᚋmodelᚐWallEnd(ctx context.Context, sel ast.SelectionSet, v *model.WallEnd) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5785,7 +5860,7 @@ func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Conte
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5957,7 +6032,7 @@ func (ec *executionContext) marshalN__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgen�
 func (ec *executionContext) marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx context.Context, sel ast.SelectionSet, v *introspection.Type) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5974,7 +6049,7 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
