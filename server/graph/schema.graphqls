@@ -9,13 +9,13 @@ type User{
   username: String!
   birthday: String!
 }
-input BTI_agent{
-  id: ID!
-  prompt: String!
-}
+
+
 
 type Query {
   getUser(id: ID!): User
+  getUserProject(project_id: ID! , user_id: ID!): PlanningProject!
+
 }
 
 input RegisterInput {
