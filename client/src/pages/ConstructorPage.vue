@@ -96,6 +96,7 @@ const unityConnected = ref(false)
 const viewMode = ref('top')
 const mode = ref('select')
 const addingWall = ref(null)
+const movingWall = ref(null)
 
 const geometry = ref(props.initialGeometry || { rooms: [] })
 const walls = ref(
@@ -137,8 +138,49 @@ const onWheel = (e) => {
   view.y += (before.y - after.y) * view.scale
 }
 
-const onPointerDown = (e) => { view.dragging = true; view.lastX = e.clientX; view.lastY = e.clientY }
+const onPointerDown = (e) => {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const pt = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+  if (mode.value === 'moveWall') {
+    const w = nearestWall(pt)
+    if (w) {
+      const nearStart = Math.hypot(pt.x - w.start.x, pt.y - w.start.y) < 0.3
+      const nearEnd = Math.hypot(pt.x - w.end.x, pt.y - w.end.y) < 0.3
+      if (nearStart) {
+        movingWall.value = { id: w.id, endpoint: 'start' }
+        return
+      }
+      if (nearEnd) {
+        movingWall.value = { id: w.id, endpoint: 'end' }
+        return
+      }
+      movingWall.value = { id: w.id, endpoint: 'segment', offset: { dx: pt.x - w.start.x, dy: pt.y - w.start.y } }
+      return
+    }
+  }
+  view.dragging = true; view.lastX = e.clientX; view.lastY = e.clientY
+}
 const onPointerMove = (e) => {
+  if (movingWall.value) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pt = snap(screenToWorld(e.clientX - rect.left, e.clientY - rect.top), 0.05)
+    const id = movingWall.value.id
+    walls.value = walls.value.map((w) => {
+      if (String(w.id) !== String(id)) return w
+      if (movingWall.value.endpoint === 'start') {
+        return { ...w, start: { x: pt.x, y: pt.y } }
+      }
+      if (movingWall.value.endpoint === 'end') {
+        return { ...w, end: { x: pt.x, y: pt.y } }
+      }
+      const sx = pt.x - (movingWall.value.offset?.dx || 0)
+      const sy = pt.y - (movingWall.value.offset?.dy || 0)
+      const ex = sx + (w.end.x - w.start.x)
+      const ey = sy + (w.end.y - w.start.y)
+      return { ...w, start: { x: sx, y: sy }, end: { x: ex, y: ey } }
+    })
+    return
+  }
   if (!view.dragging) return
   const dx = e.clientX - view.lastX
   const dy = e.clientY - view.lastY
@@ -147,7 +189,7 @@ const onPointerMove = (e) => {
   view.lastX = e.clientX
   view.lastY = e.clientY
 }
-const onPointerUp = () => { view.dragging = false }
+const onPointerUp = () => { view.dragging = false; movingWall.value = null }
 
 const pinch = reactive({ active: false, startDist: 0, startScale: 0, cx: 0, cy: 0 })
 
@@ -375,6 +417,7 @@ const attachSelected = () => {
   walls.value = p.walls || []
   isSelecting.value = false
   selectedProjectId.value = null
+  setTimeout(() => fitViewToProject(), 0)
 }
 
 const cancelSelecting = () => { isSelecting.value = false; selectedProjectId.value = null }
@@ -383,6 +426,38 @@ const changeAttachment = () => { attachedProject.value = null; isSelecting.value
 watch([geometry, walls], () => { if (unityConnected.value) sendGeometryToUnity() })
 
 onMounted(() => { draw() })
+
+const fitViewToProject = () => {
+  const c = canvas2d.value
+  if (!c) return
+  const parent = c.parentElement
+  const wCSS = parent.clientWidth
+  const hCSS = parent.clientHeight
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const w of walls.value) {
+    minX = Math.min(minX, w.start.x, w.end.x)
+    minY = Math.min(minY, w.start.y, w.end.y)
+    maxX = Math.max(maxX, w.start.x, w.end.x)
+    maxY = Math.max(maxY, w.start.y, w.end.y)
+  }
+  for (const room of geometry.value.rooms || []) {
+    for (const v of room.vertices || []) {
+      minX = Math.min(minX, v.x); minY = Math.min(minY, v.y)
+      maxX = Math.max(maxX, v.x); maxY = Math.max(maxY, v.y)
+    }
+  }
+  if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return
+  const contentW = Math.max(1, maxX - minX)
+  const contentH = Math.max(1, maxY - minY)
+  const margin = 20
+  const scaleX = (wCSS - margin * 2) / contentW
+  const scaleY = (hCSS - margin * 2) / contentH
+  view.scale = Math.min(180, Math.max(20, Math.min(scaleX, scaleY)))
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  view.x = wCSS / 2 - cx * view.scale
+  view.y = hCSS / 2 - cy * view.scale
+}
 </script>
 
 <style scoped>
