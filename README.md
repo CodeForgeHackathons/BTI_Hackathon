@@ -120,7 +120,7 @@
 2. Установите зависимости: `npm install`.
 3. Запустите разработку: `npm run dev` (по умолчанию http://localhost:5173).
 4. При необходимости задайте переменные окружения (`.env`):
-   - `VITE_GRAPHQL_ENDPOINT=http://92.255.79.208:8080/query`
+   - `VITE_GRAPHQL_ENDPOINT=http://localhost:8080/query`
    - `VITE_ENABLE_PROJECT_API=true`
 
 ## Структура данных проекта (payload)

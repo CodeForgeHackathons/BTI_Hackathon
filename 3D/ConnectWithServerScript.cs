@@ -11,7 +11,7 @@ using System.IO;
 class ModelGeneratorServer
 {
     private static HttpListener listener;
-    private static string url = "http://92.255.79.208:8080/query";
+    private static string url = "http://localhost:8080/query";
 
     public static async Task Main(string[] args)
     {

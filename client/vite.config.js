@@ -23,7 +23,7 @@ export default defineConfig({
       },
       // Прокси для GraphQL API (бэкенд на Go)
       '/graphql': {
-        target: process.env.VITE_API_URL || 'http://92.255.79.208:8080',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
         headers: {
@@ -32,7 +32,7 @@ export default defineConfig({
       },
       // Прокси для GraphQL API на endpoint /query
       '/query': {
-        target: process.env.VITE_API_URL || 'http://92.255.79.208:8080',
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
         headers: {

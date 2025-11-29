@@ -4,7 +4,7 @@
  * Настройка endpoint:
  * - По умолчанию используется '/query' (согласно настройкам сервера)
  * - Для изменения создайте файл .env с переменной VITE_GRAPHQL_ENDPOINT
- * - Пример: VITE_GRAPHQL_ENDPOINT=http://92.255.79.208:8080/query
+ * - Пример: VITE_GRAPHQL_ENDPOINT=http://localhost:8080/query
  */
  
 // URL GraphQL endpoint (можно переопределить через переменные окружения)
