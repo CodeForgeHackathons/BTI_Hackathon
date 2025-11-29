@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <header v-if="!isAccountPage" class="hero">
+    <header v-if="!isAccountPage && !isChatPage" class="hero">
       <div class="hero__topbar">
         <span class="hero__logo"></span>
         <div class="hero__top-actions">
@@ -27,8 +27,8 @@
           без сложных терминов и техподробностей.
         </p>
         <div class="hero__actions">
-          <button class="btn btn--primary">Загрузить план</button>
-          <button class="btn btn--ghost">Посмотреть примеры</button>
+          <button class="btn btn--primary" @click="scrollToIntake">Загрузить план</button>
+          <button class="btn btn--ghost" @click="scrollToGallery">Посмотреть примеры</button>
         </div>
       </div>
       <div class="hero__visual">
@@ -36,15 +36,21 @@
           <h3>Сценарий «Семейная 70 м²»</h3>
           <p>+1 спальня · +15% естественного света</p>
           <div class="visual-card__plan">
-            <span>До</span>
-            <span>После</span>
+            <div class="visual-card__col">
+              <span>До</span>
+              <img :src="beforeImageUrl" alt="До" class="visual-card__img" loading="lazy" />
+            </div>
+            <div class="visual-card__col">
+              <span>После</span>
+              <img :src="afterImageUrl" alt="После" class="visual-card__img" loading="lazy" />
+            </div>
           </div>
         </div>
       </div>
     </header>
 
-    <template v-if="!isAccountPage">
-      <section class="intake">
+    <template v-if="!isAccountPage && !isChatPage">
+      <section class="intake" id="intake">
       <div class="section-header">
         <h2>Шаг 1. Расскажите о квартире</h2>
         <p>
@@ -214,10 +220,25 @@
           <div class="step__number">{{ index + 1 }}</div>
           <h3>{{ step.title }}</h3>
           <p>{{ step.description }}</p>
-          <a class="step__link" href="#">Узнать больше</a>
+          <a class="step__link" href="#" @click.prevent="openFlowModal(index)">Узнать больше</a>
         </article>
       </div>
     </section>
+
+    <div v-if="isFlowModalOpen" class="modal-backdrop" @click.self="closeFlowModal">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>{{ steps[activeFlowStep]?.title }}</h3>
+          <button type="button" class="modal__close" @click="closeFlowModal">×</button>
+        </div>
+        <div class="modal__body">
+          <p class="flow-modal__lead">{{ steps[activeFlowStep]?.description }}</p>
+          <ul class="flow-modal__list">
+            <li v-for="detail in steps[activeFlowStep]?.details" :key="detail">{{ detail }}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
 
     <section class="recognition">
       <div class="recognition__text">
@@ -231,21 +252,65 @@
           <li>Экспорт в DWG, SVG и интерактивный 3D</li>
           <li>История версий и совместная работа с архитектором</li>
         </ul>
-        <button class="btn btn--primary btn--small">
+        <button class="btn btn--primary btn--small" @click="openCaseModal">
           Показать полный кейс
         </button>
       </div>
       <div class="recognition__preview">
         <div class="preview-card">
           <p>До</p>
-          <div class="preview-card__plan preview-card__plan--raw"></div>
+          <img :src="beforeImageUrl" alt="До" class="preview-card__img" loading="lazy" />
         </div>
         <div class="preview-card">
           <p>После</p>
-          <div class="preview-card__plan preview-card__plan--clean"></div>
+          <img :src="afterImageUrl" alt="После" class="preview-card__img" loading="lazy" />
         </div>
       </div>
     </section>
+
+    <div v-if="isCaseModalOpen" class="modal-backdrop" @click.self="closeCaseModal">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Полный кейс HomePlanner3D</h3>
+          <button type="button" class="modal__close" @click="closeCaseModal">×</button>
+        </div>
+        <div class="modal__body case-modal">
+          <div class="case-modal__section">
+            <h4>Что вы получаете</h4>
+            <ul class="case-modal__list">
+              <li>Загрузка техпаспорта или фото плана в один клик</li>
+              <li>Автораспознавание стен, комнат и ключевых меток</li>
+              <li>Быстрый конструктор: снос/перенос стен, перегородки, базовая мебель</li>
+              <li>Визуализация: точный план сверху и прогулка от первого лица</li>
+              <li>Проверка норм: несущие стены, мокрые зоны, вентиляция, пожарные требования</li>
+              <li>AI‑сценарии: 3–5 вариантов зонирования под ваши цели и бюджет</li>
+              <li>Экспорт и заявка: DWG/SVG/3D и передача данных в БТИ</li>
+            </ul>
+          </div>
+
+          <div class="case-modal__section">
+            <h4>Как это работает</h4>
+            <ul class="case-modal__list">
+              <li>Загружаете план квартиры</li>
+              <li>Система распознаёт геометрию и заполняет данные автоматически</li>
+              <li>Редактируете в конструкторе и смотрите результат в 2.5D/FPV</li>
+              <li>Получаете моментальную проверку норм и понятный отчёт</li>
+              <li>Выбираете готовый AI‑вариант или создаёте свой</li>
+              <li>Отправляете заявку и получаете сопровождение экспертов</li>
+            </ul>
+          </div>
+
+          <div class="case-modal__section">
+            <h4>Для кого</h4>
+            <ul class="case-modal__list">
+              <li>Владельцы квартир, семьи, инвесторы</li>
+              <li>Дизайнеры и архитекторы</li>
+              <li>Девелоперы и управляющие компании</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <section class="builder">
       <div class="section-header">
@@ -291,10 +356,23 @@
           <p>{{ check.description }}</p>
         </article>
       </div>
-      <button class="btn btn--ghost">Получить отчёт по нормам</button>
+      <button class="btn btn--ghost" @click="openNormsReport">Получить отчёт по нормам</button>
     </section>
 
-    <section class="gallery">
+    <div v-if="isNormsModalOpen" class="modal-backdrop" @click.self="closeNormsModal">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Универсальный отчёт по нормам</h3>
+          <button type="button" class="modal__close" @click="closeNormsModal">×</button>
+        </div>
+        <div class="modal__body report-modal">
+          <p v-if="isGeneratingReport">Формируем отчёт…</p>
+          <pre v-else class="report-modal__text">{{ normsReportText }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <section class="gallery" id="gallery">
       <div class="section-header">
         <h2>Готовые варианты перепланировок</h2>
         <p>Выберите по типу квартиры, целям и доступному бюджету.</p>
@@ -338,11 +416,38 @@
           </ul>
         </article>
       </div>
-      <button class="btn btn--primary btn--small">Запросить варианты AI</button>
+      <button class="btn btn--primary btn--small" @click="openAiRequestModal">Запросить варианты AI</button>
     </section>
 
+    <div v-if="isAiRequestModalOpen" class="modal-backdrop" @click.self="closeAiRequestModal">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Запрос вариантов AI</h3>
+          <button type="button" class="modal__close" @click="closeAiRequestModal">×</button>
+        </div>
+        <div class="modal__body ai-request">
+          <form class="ai-request__form" @submit.prevent="submitAiRequest">
+            <label>
+              Цели человека
+              <textarea v-model="aiRequest.goals" rows="4" placeholder="Добавить кабинет, больше света, удобная детская"></textarea>
+            </label>
+            <label>
+              Набор ограничений
+              <textarea v-model="aiRequest.constraints" rows="4" placeholder="нельзя переносить кухню над жилой\nсохранить вентшахту"></textarea>
+            </label>
+            <div class="ai-request__actions">
+              <button type="submit" class="btn btn--primary btn--small">Отправить запрос</button>
+              <button type="button" class="btn btn--ghost btn--small" @click="closeAiRequestModal">Отмена</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <section class="demo">
-      <div class="demo__media"></div>
+      <div class="demo__media">
+        <img :src="demoImageUrl" alt="Визуализация квартиры" class="demo__img" loading="lazy" />
+      </div>
       <div class="demo__content">
         <h2>Интерактивная 3D и AR визуализация</h2>
         <p>
@@ -350,7 +455,7 @@
           режимом сверху и прогулкой от первого лица с семьёй или архитектором,
           оставляйте комментарии и фиксируйте правки.
         </p>
-        <button class="btn btn--primary">Попробовать демо</button>
+        <button class="btn btn--primary" @click="scrollToIntake">Попробовать демо</button>
       </div>
     </section>
 
@@ -387,17 +492,24 @@
       <form class="experts__form">
         <label>
           Имя и город
-          <input type="text" placeholder="Мария, Москва" />
+          <input v-model="expertsForm.nameCity" type="text" placeholder="Мария, Москва" />
+          <small class="field-hint">Формат: Имя, Город. Например: Анна-Мария, Нижний Новгород.</small>
+          <small v-if="expertErrors.nameCity" class="field-error">{{ expertErrors.nameCity }}</small>
         </label>
         <label>
           Контакт
-          <input type="text" placeholder="@telegram или телефон" />
+          <input v-model="expertsForm.contact" type="text" placeholder="@telegram или телефон" />
+          <small class="field-hint">Telegram: @username или телефон: +7 916 123-45-67</small>
+          <small v-if="expertErrors.contact" class="field-error">{{ expertErrors.contact }}</small>
         </label>
         <label>
           Комментарий
-          <textarea placeholder="Квартира 62 м², нужен проект перепланировки"></textarea>
+          <textarea v-model="expertsForm.comment" placeholder="Квартира 62 м², нужен проект перепланировки"></textarea>
+          <small class="field-hint">Опишите задачу. Например: «Перепланировка 70 м², увеличить кухню‑гостиную».</small>
+          <small v-if="expertErrors.comment" class="field-error">{{ expertErrors.comment }}</small>
         </label>
-        <button type="button" class="btn btn--primary">Отправить заявку</button>
+        <button type="button" class="btn btn--primary" @click="submitExpertRequest" :disabled="!canSubmitExpert">Отправить заявку</button>
+        <p v-if="expertSubmitStatus" class="experts__status">{{ expertSubmitStatus }}</p>
       </form>
     </section>
 
@@ -413,8 +525,8 @@
         </article>
       </div>
       <div class="faq__actions">
-        <button class="btn btn--ghost">Скачать гид по перепланировке</button>
-        <button class="btn btn--primary btn--small">Чат с экспертом</button>
+        <button class="btn btn--ghost" @click="downloadGuide">Скачать гид по перепланировке</button>
+        <button class="btn btn--primary btn--small" @click="goToChat">Чат с экспертом</button>
       </div>
     </section>
 
@@ -424,21 +536,23 @@
         <p>Цифровой помощник перепланировки: распознаём планы, проверяем нормы, показываем будущее жильё.</p>
       </div>
       <div class="footer__links">
-        <a href="#">Контакты</a>
-        <a href="#">Telegram</a>
-        <a href="#">Политика</a>
+        <a href="#" @click.prevent="openContacts">Контакты</a>
+        <a href="#" @click.prevent="openTelegram">Telegram</a>
+        <a href="#" @click.prevent="openPolicy">Политика</a>
       </div>
     </footer>
     </template>
 
     <AccountPage
-      v-else
+      v-else-if="isAccountPage"
       :user="currentUser"
       :format-birthday="formatBirthday"
       @back="goToLanding"
       @open-auth="openAuthFromAccountPage"
       @logout="handleLogout"
     />
+
+    <ChatPage v-else @back="goToLandingFromChat" />
 
     <!-- Модальное окно входа / регистрации -->
     <div v-if="isAuthModalOpen" class="modal-backdrop" @click.self="isAuthModalOpen = false">
@@ -548,13 +662,218 @@
         </div>
       </div>
     </div>
+
+    <div v-if="isContactsOpen" class="modal-backdrop" @click.self="closeContacts">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Контакты</h3>
+          <button type="button" class="modal__close" @click="closeContacts">×</button>
+        </div>
+        <div class="modal__body">
+          <p>Telegram: @homeplanner3d</p>
+          <p>Email: info@homeplanner3d.example</p>
+          <div style="margin-top: 8px; display: flex; gap: 8px;">
+            <button type="button" class="btn btn--primary btn--small" @click="openTelegramExternal">Открыть Telegram</button>
+            <button type="button" class="btn btn--ghost btn--small" @click="closeContacts">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="isTelegramOpen" class="modal-backdrop" @click.self="closeTelegram">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Telegram</h3>
+          <button type="button" class="modal__close" @click="closeTelegram">×</button>
+        </div>
+        <div class="modal__body">
+          <p>Наш официальный канал: @homeplanner3d</p>
+          <div style="margin-top: 8px; display: flex; gap: 8px;">
+            <button type="button" class="btn btn--primary btn--small" @click="openTelegramExternal">Открыть Telegram</button>
+            <button type="button" class="btn btn--ghost btn--small" @click="closeTelegram">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="isPolicyOpen" class="modal-backdrop" @click.self="closePolicy">
+      <div class="modal">
+        <div class="modal__header">
+          <h3>Политика обработки данных</h3>
+          <button type="button" class="modal__close" @click="closePolicy">×</button>
+        </div>
+        <div class="modal__body">
+          <p>Мы бережно относимся к вашим данным: используем шифрование, изолированное хранение и удаление по запросу.</p>
+          <p>Данные из планов применяются только для подготовки сценариев и консультаций.</p>
+          <div style="margin-top: 8px; display: flex; gap: 8px;">
+            <button type="button" class="btn btn--ghost btn--small" @click="closePolicy">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue';
+import { reactive, ref, onMounted, computed } from 'vue';
 import { graphqlRequest, ASK_BTI_AGENT_MUTATION } from './utils/graphqlClient.js';
 import AccountPage from './pages/AccountPage.vue';
+import ChatPage from './pages/ChatPage.vue';
+import beforeImageUrl from './assets/Сценарий «Семейная 70 м²»ДО.png';
+import afterImageUrl from './assets/Сценарий «Семейная 70 м²»ПОСЛЕ.png';
+import demoImageUrl from './assets/ВертКвар.png';
+
+const scrollToSection = (id) => {
+  try {
+    const el = typeof document !== 'undefined' ? document.getElementById(id) : null;
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch {}
+};
+
+const scrollToIntake = () => scrollToSection('intake');
+const scrollToGallery = () => scrollToSection('gallery');
+const isFlowModalOpen = ref(false);
+const activeFlowStep = ref(null);
+const openFlowModal = (index) => {
+  activeFlowStep.value = index;
+  isFlowModalOpen.value = true;
+};
+const closeFlowModal = () => {
+  isFlowModalOpen.value = false;
+  activeFlowStep.value = null;
+};
+const isCaseModalOpen = ref(false);
+const openCaseModal = () => {
+  isCaseModalOpen.value = true;
+};
+const closeCaseModal = () => {
+  isCaseModalOpen.value = false;
+};
+const isNormsModalOpen = ref(false);
+const isGeneratingReport = ref(false);
+const normsReportText = ref('');
+const closeNormsModal = () => {
+  isNormsModalOpen.value = false;
+  normsReportText.value = '';
+};
+const isAiRequestModalOpen = ref(false);
+const aiRequest = reactive({ goals: '', constraints: '' });
+const openAiRequestModal = () => {
+  aiRequest.goals = formData.goal || '';
+  aiRequest.constraints = formData.constraintsText || '';
+  isAiRequestModalOpen.value = true;
+};
+const closeAiRequestModal = () => {
+  isAiRequestModalOpen.value = false;
+};
+const downloadAiRequestJson = (goals, constraintsText) => {
+  const constraints = (constraintsText || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const payload = {
+    timestamp: new Date().toISOString(),
+    aiRequest: {
+      goals: goals || '',
+      constraints,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `homeplanner3d-ai-request-${Date.now()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+const submitAiRequest = () => {
+  formData.goal = aiRequest.goals || formData.goal;
+  formData.constraintsText = aiRequest.constraints || formData.constraintsText;
+  isAiRequestModalOpen.value = false;
+  downloadAiRequestJson(aiRequest.goals, aiRequest.constraints);
+};
+
+const buildLocalNormsReport = (payload) => {
+  const p = payload || {};
+  const plan = p.plan || {};
+  const address = plan.address || '—';
+  const area = plan.area ? `${plan.area} м²` : '—';
+  const layoutType = plan.layoutType || '—';
+  const ceiling = plan.ceilingHeight ? `${plan.ceilingHeight} м` : '—';
+  const roomsCount = (p.geometry?.rooms || []).length;
+  const wallsCount = (p.walls || []).length;
+  const userConstraints = p.constraints?.forbiddenMoves || parseConstraints();
+
+  const sections = [];
+  sections.push([
+    'Сводка объекта',
+    `Адрес: ${address}`,
+    `Площадь: ${area}`,
+    `Тип квартиры: ${layoutType}`,
+    `Высота потолков: ${ceiling}`,
+    `Комнат (по геометрии): ${roomsCount}`,
+    `Стены: ${wallsCount}`,
+  ].join('\n'));
+
+  const statusLines = checks.map((c) => `- ${c.title}: ${c.statusLabel} — ${c.description}`);
+  sections.push(['Статусы проверок', ...statusLines].join('\n'));
+
+  sections.push([
+    'Ключевые требования',
+    '• Несущие стены: проёмы только с проектным усилением (перемычка/рама).',
+    '• Мокрые зоны: перенос кухни/санузла над жилыми — не допускается.',
+    '• Вентиляция: шахты не перекрывать; оборудование не переносить без проекта.',
+    '• Пожарная безопасность: минимальный проход эвакуации ≥ 0.9 м; двери мокрых зон ≥ 0.7 м.',
+  ].join('\n'));
+
+  sections.push([
+    'Рекомендации',
+    '• Зафиксируйте границы мокрых зон и трассы инженерии.',
+    '• Проверьте тип и расположение несущих стен по серии дома/техпаспорту.',
+    '• При изменении несущих/мокрых зон — подготовьте проект перепланировки для БТИ.',
+  ].join('\n'));
+
+  const nextSteps = [
+    '1) Уточнить адрес, этаж и серию дома.',
+    '2) Сформировать пакет: план ДО/ПОСЛЕ, экспликация, поэтажный план.',
+    '3) Отправить заявку: консультация эксперта и согласование.',
+  ];
+  sections.push(['Следующие шаги', ...nextSteps].join('\n'));
+
+  if (userConstraints?.length) {
+    sections.push(['Ограничения пользователя', ...userConstraints.map((r) => `- ${r}`)].join('\n'));
+  }
+
+  return sections.join('\n\n');
+};
+
+const openNormsReport = async () => {
+  isNormsModalOpen.value = true;
+  isGeneratingReport.value = true;
+  normsReportText.value = '';
+
+  try {
+    // Собираем payload из формы
+    handleGenerate();
+    let payload = {};
+    try {
+      payload = JSON.parse(generatedJson.value || '{}');
+    } catch {}
+
+    // Пытаемся получить отчёт с сервера
+    const response = await sendToApi(payload);
+    const universal = buildLocalNormsReport(payload);
+    if (response?.ok && response.data) {
+      normsReportText.value = `${universal}\n\nКомментарий сервера:\n${String(response.data)}`;
+    } else {
+      normsReportText.value = universal;
+    }
+  } catch (e) {
+    normsReportText.value = buildLocalNormsReport();
+  } finally {
+    isGeneratingReport.value = false;
+  }
+};
 
 // API включено по умолчанию, задайте VITE_ENABLE_PROJECT_API=false чтобы отключить
 const projectApiEnabled =
@@ -690,6 +1009,10 @@ const authLoading = ref(false);
 const authError = ref('');
 const isAuthModalOpen = ref(false);
 const isAccountPage = ref(false);
+const isChatPage = ref(false);
+const isContactsOpen = ref(false);
+const isTelegramOpen = ref(false);
+const isPolicyOpen = ref(false);
 
 const authForm = reactive({
   login: '',
@@ -710,6 +1033,7 @@ const handleAccountButtonClick = () => {
 
 const goToLanding = () => {
   isAccountPage.value = false;
+  isChatPage.value = false;
 };
 
 const openAuthFromAccountPage = () => {
@@ -720,6 +1044,24 @@ const handleLogout = () => {
   logout();
   isAccountPage.value = false;
   isAuthModalOpen.value = false;
+};
+
+const goToChat = () => {
+  isChatPage.value = true;
+};
+
+const goToLandingFromChat = () => {
+  isChatPage.value = false;
+};
+
+const openContacts = () => { isContactsOpen.value = true; };
+const closeContacts = () => { isContactsOpen.value = false; };
+const openTelegram = () => { isTelegramOpen.value = true; };
+const closeTelegram = () => { isTelegramOpen.value = false; };
+const openPolicy = () => { isPolicyOpen.value = true; };
+const closePolicy = () => { isPolicyOpen.value = false; };
+const openTelegramExternal = () => {
+  try { if (typeof window !== 'undefined') window.open('https://t.me/homeplanner3d', '_blank'); } catch {}
 };
 
 const parseRooms = () =>
@@ -1188,26 +1530,51 @@ const steps = [
     title: 'Распознаём план',
     description:
       'Загрузите PDF, DWG или фото — алгоритм строит точную геометрию и сетку помещений.',
+    details: [
+      'Поддержка PDF/изображений, OCR и извлечение метаданных',
+      'Определение стен, комнат и масштаба с ML/алгоритмами',
+      'Автозаполнение формы и показ статистики распознавания'
+    ],
   },
   {
     title: 'Конструктор 2.5D/FPV',
     description:
       'Переходите в интерактивный редактор: сносите стены, ставьте перегородки, расставляйте мебель.',
+    details: [
+      'Режим плана сверху и вид от первого лица',
+      'Снос/перенос стен, перегородки, базовая мебель',
+      'История изменений и сравнение сценариев'
+    ],
   },
   {
     title: 'Автопроверки норм',
     description:
       'Каждое действие сверяется с СНиП, Жилищным кодексом и правилами ЖК в реальном времени.',
+    details: [
+      'Несущие стены и допустимые проёмы',
+      'Мокрые зоны и вентиляция',
+      'Пожарные требования и эвакуационные пути'
+    ],
   },
   {
     title: 'AI генерирует варианты',
     description:
       'Получайте 3–5 сценариев зонирования с учётом целей, бюджета и ограничений.',
+    details: [
+      'Генерация вариантов на основе целей и ограничений',
+      'Предварительная проверка норм для каждого варианта',
+      'Быстрая отправка в конструктор для доработки'
+    ],
   },
   {
     title: 'Передаём в БТИ',
     description:
       'Отправьте заявку, и эксперты БТИ оформят проект и согласуют перепланировку.',
+    details: [
+      'Подготовка пакета данных и чертежей',
+      'Передача в БТИ без повторного ввода',
+      'Поддержка консультаций и статусов'
+    ],
   },
 ];
 
@@ -1369,6 +1736,190 @@ const faq = [
       'Все планы шифруются, хранятся в изолированном контуре и удаляются по запросу.',
   },
 ];
+
+const expertSubmitStatus = ref('');
+const expertsForm = reactive({ nameCity: '', contact: '', comment: '' });
+const canSubmitExpert = computed(() => {
+  const nameCity = expertsForm.nameCity.trim();
+  const contact = expertsForm.contact.trim();
+  const comment = expertsForm.comment.trim();
+  const placeholderName = 'Мария, Москва';
+  const placeholderContact = '@telegram или телефон';
+  const placeholderComment = 'Квартира 62 м², нужен проект перепланировки';
+  if (!nameCity || nameCity === placeholderName) return false;
+  if (!/^[A-Za-zА-Яа-яёЁ][A-Za-zА-Яа-яёЁ\-\s]*\s*,\s*[A-Za-zА-Яа-яёЁ\-\s]+$/.test(nameCity)) return false;
+  if (!contact || contact === placeholderContact) return false;
+  const phoneOk = /^\+?[0-9\-\s()]{10,20}$/.test(contact);
+  const tgOk = /^@[A-Za-z0-9_]{5,32}$/.test(contact);
+  if (!(phoneOk || tgOk)) return false;
+  if (!comment || comment === placeholderComment) return false;
+  if (comment.length < 8) return false;
+  return true;
+});
+const submitExpertRequest = () => {
+  if (!canSubmitExpert.value) {
+    expertSubmitStatus.value = '';
+    return;
+  }
+  expertSubmitStatus.value = 'Заявка Отправлена';
+};
+const expertErrors = computed(() => {
+  const errors = { nameCity: '', contact: '', comment: '' };
+  const nameCity = expertsForm.nameCity.trim();
+  const contact = expertsForm.contact.trim();
+  const comment = expertsForm.comment.trim();
+  const placeholderName = 'Мария, Москва';
+  const placeholderContact = '@telegram или телефон';
+  const placeholderComment = 'Квартира 62 м², нужен проект перепланировки';
+
+  if (!nameCity || nameCity === placeholderName) {
+    errors.nameCity = 'Введите «Имя, Город»';
+  } else if (!/^[A-Za-zА-Яа-яёЁ][A-Za-zА-Яа-яёЁ\-\s]*\s*,\s*[A-Za-zА-Яа-яёЁ\-\s]+$/.test(nameCity)) {
+    errors.nameCity = 'Формат: Имя, Город (буквы, пробелы, дефис)';
+  }
+
+  if (!contact || contact === placeholderContact) {
+    errors.contact = 'Укажите @telegram или телефон';
+  } else {
+    const phoneOk = /^\+?[0-9\-\s()]{10,20}$/.test(contact);
+    const tgOk = /^@[A-Za-z0-9_]{5,32}$/.test(contact);
+    if (!(phoneOk || tgOk)) {
+      errors.contact = 'Пример: @username или +7 916 123-45-67';
+    }
+  }
+
+  if (!comment || comment === placeholderComment) {
+    errors.comment = 'Опишите задачу в нескольких словах';
+  } else if (comment.length < 8) {
+    errors.comment = 'Комментарий слишком короткий';
+  }
+
+  return errors;
+});
+
+const downloadGuide = () => {
+  const lines = [
+    'Гид по перепланировке квартиры',
+    '',
+    '1. Подготовка',
+    '• Соберите техпаспорт и поэтажный план дома.',
+    '• Уточните серию дома, несущие стены и мокрые зоны.',
+    '• Зафиксируйте цели: больше света, дополнительная комната, кабинет и т.д.',
+    '',
+    '2. Анализ плана',
+    '• Загрузите PDF/фото плана в HomePlanner3D.',
+    '• Проверьте распознанные стены, комнаты и масштабы.',
+    '• Уточните ограничения: перенос кухонь/санузлов, вентиляция, пожарные требования.',
+    '',
+    '3. Редактура и визуализация',
+    '• В конструкторе попробуйте безопасные проёмы, перегородки и мебель.',
+    '• Оцените план сверху и прогулку от первого лица.',
+    '',
+    '4. Проверка норм',
+    '• Несущие стены: проёмы только с проектным усилением.',
+    '• Мокрые зоны: перенос над жилыми не допускается.',
+    '• Вентиляция: шахты не перекрывать.',
+    '• Пожарная безопасность: проходы ≥ 0.9 м, двери мокрых зон ≥ 0.7 м.',
+    '',
+    '5. Документы для согласования',
+    '• План до/после с экспликацией.',
+    '• Поэтажный план и серия дома.',
+    '• Проект перепланировки (при несущих/инженерии).',
+    '',
+    '6. Советы',
+    '• Начинайте с мини‑вмешательств, затем усложняйте.',
+    '• Сохраняйте версии и сравнивайте варианты.',
+    '• При сомнениях — консультация с экспертом БТИ.',
+    '',
+    '— HomePlanner3D'
+  ];
+
+  const pageW = 595;
+  const pageH = 842;
+  const scale = Math.min(2, window.devicePixelRatio || 1);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.floor(pageW * scale);
+  canvas.height = Math.floor(pageH * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, pageW, pageH);
+  ctx.fillStyle = '#333333';
+  ctx.font = '8px Arial, sans-serif';
+  const x = 40;
+  const maxWidth = pageW - 80;
+  let y = 60;
+
+  const drawWrapped = (text) => {
+    if (!text) { y += 4; return; }
+    const words = text.split(' ');
+    let line = '';
+    for (let i = 0; i < words.length; i++) {
+      const test = line ? line + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxWidth) {
+        ctx.fillText(line, x, y);
+        y += 12;
+        line = words[i];
+      } else {
+        line = test;
+      }
+    }
+    if (line) {
+      ctx.fillText(line, x, y);
+      y += 12;
+    }
+  };
+
+  ctx.font = '600 10px Arial, sans-serif';
+  drawWrapped(lines[0]);
+  ctx.font = '8px Arial, sans-serif';
+  lines.slice(1).forEach(drawWrapped);
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  const base64 = dataUrl.split(',')[1];
+  const binary = atob(base64);
+  const imgBytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) imgBytes[i] = binary.charCodeAt(i);
+
+  const enc = new TextEncoder();
+  const parts = [];
+  const offsets = [];
+  let pos = 0;
+  const pushStr = (s) => { const b = enc.encode(s); parts.push(b); offsets.push(pos); pos += b.length; };
+  const pushPre = (s) => { const b = enc.encode(s); parts.push(b); offsets.push(pos); pos += b.length; };
+  const pushBin = (b) => { parts.push(b); pos += b.length; };
+  const pushPost = (s) => { const b = enc.encode(s); parts.push(b); pos += b.length; };
+
+  pushStr('%PDF-1.4\n');
+  pushStr('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  pushStr('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+  pushStr('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n');
+
+  const imgObjHeader = `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${pageW} /Height ${pageH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgBytes.length} >>\nstream\n`;
+  pushPre(imgObjHeader);
+  pushBin(imgBytes);
+  pushPost('\nendstream\nendobj\n');
+
+  const contentStream = 'q\n595 0 0 842 0 0 cm\n/Im0 Do\nQ\n';
+  pushStr(`5 0 obj\n<< /Length ${enc.encode(contentStream).length} >>\nstream\n${contentStream}endstream\nendobj\n`);
+
+  const xrefPos = pos;
+  let xref = 'xref\n0 6\n';
+  xref += '0000000000 65535 f \n';
+  for (let i = 0; i < offsets.length; i++) {
+    const off = String(offsets[i]).padStart(10, '0');
+    xref += `${off} 00000 n \n`;
+  }
+  const trailer = `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF`;
+
+  const pdfBytes = new Blob([...parts, enc.encode(xref), enc.encode(trailer)], { type: 'application/pdf' });
+  const url = URL.createObjectURL(pdfBytes);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `homeplanner3d-guide-${Date.now()}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 </script>
 
 <style scoped>
@@ -1761,6 +2312,19 @@ section {
   text-align: center;
 }
 
+.visual-card__col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.visual-card__img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  background: #0b0d12;
+}
+
 .flow h2 {
   margin-bottom: 24px;
 }
@@ -1802,6 +2366,76 @@ section {
   font-weight: 600;
 }
 
+.flow-modal__lead {
+  color: #c6cad4;
+  margin-bottom: 12px;
+}
+
+.flow-modal__list {
+  padding-left: 18px;
+  color: #c6cad4;
+}
+
+.flow-modal__list li {
+  margin-bottom: 6px;
+}
+
+.case-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.case-modal__section h4 {
+  margin: 8px 0;
+}
+
+.case-modal__list {
+  padding-left: 18px;
+  color: #c6cad4;
+}
+
+.report-modal {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.report-modal__text {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 14px;
+  color: #c6cad4;
+}
+
+.ai-request__form {
+  display: grid;
+  gap: 12px;
+}
+
+.ai-request__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #dfe2ea;
+}
+
+.ai-request__form textarea {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #fff;
+  padding: 10px;
+  font-family: inherit;
+}
+
+.ai-request__actions {
+  display: flex;
+  gap: 8px;
+}
+
 .recognition {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1834,6 +2468,56 @@ section {
   background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
     linear-gradient(0deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+.preview-card__img {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  margin-top: 12px;
+  background: #0b0d12;
+}
+
+.demo__img {
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 18px;
+  background: #0b0d12;
+}
+
+@media (max-width: 1024px) {
+  .page { padding: 24px 32px 72px; }
+  .hero { padding: 40px; }
+  .demo__img { max-height: 360px; }
+}
+
+@media (max-width: 768px) {
+  .hero { grid-template-columns: 1fr; padding: 32px; }
+  .hero__content { max-width: none; }
+  .hero__actions { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .hero__visual { margin-top: 12px; }
+
+  .builder__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .builder__modes { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .checks__list { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .gallery__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .ai__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .testimonials__list { display: grid; grid-template-columns: 1fr; gap: 12px; }
+
+  .demo { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .demo__img { max-height: 300px; }
+
+  .modal { width: 90vw; max-width: 680px; }
+  .preview-card__img { max-height: 220px; object-fit: cover; }
+}
+
+@media (max-width: 480px) {
+  .page { padding: 20px 20px 64px; }
+  .hero { border-radius: 20px; padding: 24px; }
+  .hero__actions .btn { width: 100%; }
+  .demo__img { max-height: 240px; border-radius: 16px; }
+  .modal { width: 92vw; }
 }
 
 .builder__grid {
@@ -2066,6 +2750,21 @@ section {
 .experts__form textarea {
   min-height: 96px;
   resize: none;
+}
+
+.experts__status {
+  color: #a5ffb6;
+  font-weight: 600;
+}
+
+.field-hint {
+  color: #98a2c3;
+  font-size: 12px;
+}
+
+.field-error {
+  color: #ff9b9b;
+  font-size: 12px;
 }
 
 .faq__list {
