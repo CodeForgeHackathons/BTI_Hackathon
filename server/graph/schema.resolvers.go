@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 )
@@ -46,6 +47,9 @@ func (r *mutationResolver) CreatePlanningProject(ctx context.Context, input mode
 	}
 	var decision string = "pending"
 	aiAnalyze, err := assistant.AiAnalyze(string(inputJSON))
+	log.Printf("Sending to AI: %s", string(inputJSON))
+	log.Printf("AI ROW : %s", aiAnalyze.Decision)
+
 	if err == nil {
 		if aiAnalyze.Decision != "" {
 			decision = aiAnalyze.Decision
@@ -240,6 +244,8 @@ func (r *queryResolver) GetUser(ctx context.Context, id string) (*model.User, er
 
 	return user_graphql, nil
 }
+
+// GetUserProject is the resolver for the getUserProject field.
 func (r *queryResolver) GetUserProject(ctx context.Context, projectID string, userID string) (*model.PlanningProject, error) {
 	var project models.PlanningProject
 
@@ -252,6 +258,8 @@ func (r *queryResolver) GetUserProject(ctx context.Context, projectID string, us
 
 	return ConvertDbProjectToGraph(&project), nil
 }
+
+// GetUserProjects is the resolver for the getUserProjects field.
 func (r *queryResolver) GetUserProjects(ctx context.Context, userID string) ([]*model.PlanningProject, error) {
 	var dbProjects []models.PlanningProject
 
@@ -280,34 +288,3 @@ func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.
-/*
-	func (r *queryResolver) GetUserPlanningProject(ctx context.Context, projectID string, userID string) (*model.PlanningProject, error) {
-	var dbProject models.PlanningProject
-
-	// Конвертируем string ID в int64
-	var pid, uid int64
-	if _, err := fmt.Sscanf(projectID, "%d", &pid); err != nil {
-		return nil, fmt.Errorf("неверный формат ID проекта")
-	}
-	if _, err := fmt.Sscanf(userID, "%d", &uid); err != nil {
-		return nil, fmt.Errorf("неверный формат ID пользователя")
-	}
-
-	if err := r.DB.Where("id = ? AND user_id = ?", pid, uid).First(&dbProject).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("проект не найден или у вас нет доступа")
-		}
-		return nil, fmt.Errorf("ошибка при поиске проекта: %w", err)
-	}
-
-	// Конвертируем в GraphQL модель
-	return ConvertDbProjectToGraph(&dbProject), nil
-}
-*/

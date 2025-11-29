@@ -36,10 +36,13 @@
             </div>
             <div v-if="isSelecting" class="attach__list">
               <label v-for="p in availableProjects" :key="p.id" class="attach__item">
-                <input type="radio" v-model="selectedProjectId" :value="p.id" />
+                <input type="radio" v-model="selectedProjectId" :value="p.id" :disabled="!isAttachable(p)" />
                 <div class="attach__meta">
                   <strong>Проект #{{ p.id }}</strong>
                   <small>{{ p.plan.address }} · {{ p.plan.area }} м²</small>
+                  <span class="attach__badge" :class="isAttachable(p) ? 'attach__badge--ok' : 'attach__badge--no'">
+                    {{ isAttachable(p) ? 'Доступно' : 'Недоступно' }} · {{ p.status }}
+                  </span>
                 </div>
               </label>
               <div class="attach__actions">
@@ -80,6 +83,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { graphqlRequest } from '../utils/graphqlClient.js'
 
 const props = defineProps({
   initialGeometry: { type: Object, default: null },
@@ -301,21 +305,65 @@ const draw = () => {
 const attachUnity = () => { unityConnected.value = true }
 const sendGeometryToUnity = () => {}
 
+const GET_USER_PROJECTS_QUERY = `
+  query GetUserProjects($user_id: ID!) {
+    getUserProjects(user_id: $user_id) {
+      id
+      status
+      createdAt
+      clientTimestamp
+      plan { address area source layoutType familyProfile goal prompt ceilingHeight floorDelta recognitionStatus }
+      geometry { rooms { id name height vertices { x y } } }
+      walls { id start { x y } end { x y } loadBearing thickness wallType }
+      constraints { forbiddenMoves regionRules }
+    }
+  }
+`
+
+const getStoredUserId = () => {
+  try { return typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('homeplanner3d:userId') : null } catch { return null }
+}
+
 const openAttach = async () => {
   isAttachLoading.value = true
-  await new Promise((r) => setTimeout(r, 400))
-  availableProjects.value = [
-    { id: 101, plan: { address: 'Москва, ул. Примерная, д. 1', area: 50.9 }, geometry: { rooms: [{ id: 'R1', name: 'Гостиная', height: 2.7, vertices: [{ x: 0, y: 0 }, { x: 5.2, y: 0 }, { x: 5.2, y: 4.1 }, { x: 0, y: 4.1 }] }] }, walls: [{ id: 'W1', start: { x: 0, y: 0 }, end: { x: 5.2, y: 0 }, loadBearing: true, thickness: 0.2, wallType: 'несущая' }] },
-    { id: 102, plan: { address: 'СПб, пр. Тестовый, д. 7', area: 68.0 }, geometry: { rooms: [{ id: 'R1', name: 'Кухня', height: 2.7, vertices: [{ x: 0, y: 0 }, { x: 3.6, y: 0 }, { x: 3.6, y: 3.0 }, { x: 0, y: 3.0 }] }] }, walls: [{ id: 'W1', start: { x: 3.6, y: 0 }, end: { x: 3.6, y: 3.0 }, loadBearing: false, thickness: 0.12, wallType: 'перегородка' }] },
-    { id: 103, plan: { address: 'Казань, ул. Образцовая, д. 3', area: 42.3 }, geometry: { rooms: [{ id: 'R1', name: 'Спальня', height: 2.7, vertices: [{ x: 0, y: 0 }, { x: 4.2, y: 0 }, { x: 4.2, y: 3.2 }, { x: 0, y: 3.2 }] }] }, walls: [{ id: 'W1', start: { x: 0, y: 3.2 }, end: { x: 4.2, y: 3.2 }, loadBearing: true, thickness: 0.2, wallType: 'несущая' }] },
-  ]
-  isAttachLoading.value = false
-  isSelecting.value = true
+  availableProjects.value = []
+  selectedProjectId.value = null
+
+  const userId = getStoredUserId()
+  if (!userId) {
+    isAttachLoading.value = false
+    isSelecting.value = true
+    return
+  }
+
+  try {
+    const data = await graphqlRequest(GET_USER_PROJECTS_QUERY, { user_id: String(userId) })
+    const projects = Array.isArray(data?.getUserProjects) ? data.getUserProjects : []
+    availableProjects.value = projects
+  } catch (e) {
+    console.warn('Не удалось загрузить проекты пользователя:', e)
+    availableProjects.value = []
+  } finally {
+    isAttachLoading.value = false
+    isSelecting.value = true
+  }
 }
+
+const isAttachableStatus = (st) => {
+  if (!st) return false
+  const s = String(st).toLowerCase()
+  const allow = ['allowed','ready','approved','active','ok','success','done','доступно','разрешено','готово']
+  const deny = ['forbid','forbidden','denied','blocked','ban','pending','processing','error','failed','archiv','delete','draft','нельзя','запрещ','ожид', 'обработ']
+  if (deny.some((k) => s.includes(k))) return false
+  if (allow.some((k) => s.includes(k))) return true
+  return false
+}
+
+const isAttachable = (p) => isAttachableStatus(p?.status)
 
 const attachSelected = () => {
   const p = availableProjects.value.find((x) => String(x.id) === String(selectedProjectId.value))
-  if (!p) return
+  if (!p || !isAttachable(p)) return
   attachedProject.value = p
   geometry.value = p.geometry || { rooms: [] }
   walls.value = p.walls || []

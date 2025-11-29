@@ -94,8 +94,9 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		GetUser        func(childComplexity int, id string) int
-		GetUserProject func(childComplexity int, projectID string, userID string) int
+		GetUser         func(childComplexity int, id string) int
+		GetUserProject  func(childComplexity int, projectID string, userID string) int
+		GetUserProjects func(childComplexity int, userID string) int
 	}
 
 	Room struct {
@@ -140,6 +141,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	GetUser(ctx context.Context, id string) (*model.User, error)
 	GetUserProject(ctx context.Context, projectID string, userID string) (*model.PlanningProject, error)
+	GetUserProjects(ctx context.Context, userID string) ([]*model.PlanningProject, error)
 }
 
 type executableSchema struct {
@@ -367,6 +369,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.GetUserProject(childComplexity, args["project_id"].(string), args["user_id"].(string)), true
+	case "Query.getUserProjects":
+		if e.complexity.Query.GetUserProjects == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getUserProjects_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetUserProjects(childComplexity, args["user_id"].(string)), true
 
 	case "Room.height":
 		if e.complexity.Room.Height == nil {
@@ -667,6 +680,17 @@ func (ec *executionContext) field_Query_getUserProject_args(ctx context.Context,
 		return nil, err
 	}
 	args["user_id"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getUserProjects_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "user_id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["user_id"] = arg0
 	return args, nil
 }
 
@@ -1773,6 +1797,65 @@ func (ec *executionContext) fieldContext_Query_getUserProject(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_getUserProject_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getUserProjects(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_getUserProjects,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().GetUserProjects(ctx, fc.Args["user_id"].(string))
+		},
+		nil,
+		ec.marshalNPlanningProject2ᚕᚖServerBTIᚋgraphᚋmodelᚐPlanningProjectᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_getUserProjects(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_PlanningProject_id(ctx, field)
+			case "status":
+				return ec.fieldContext_PlanningProject_status(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_PlanningProject_createdAt(ctx, field)
+			case "clientTimestamp":
+				return ec.fieldContext_PlanningProject_clientTimestamp(ctx, field)
+			case "plan":
+				return ec.fieldContext_PlanningProject_plan(ctx, field)
+			case "geometry":
+				return ec.fieldContext_PlanningProject_geometry(ctx, field)
+			case "walls":
+				return ec.fieldContext_PlanningProject_walls(ctx, field)
+			case "constraints":
+				return ec.fieldContext_PlanningProject_constraints(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PlanningProject", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getUserProjects_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -4805,6 +4888,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getUserProjects":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getUserProjects(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -5513,6 +5618,50 @@ func (ec *executionContext) unmarshalNPlanInput2ᚖServerBTIᚋgraphᚋmodelᚐP
 
 func (ec *executionContext) marshalNPlanningProject2ServerBTIᚋgraphᚋmodelᚐPlanningProject(ctx context.Context, sel ast.SelectionSet, v model.PlanningProject) graphql.Marshaler {
 	return ec._PlanningProject(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPlanningProject2ᚕᚖServerBTIᚋgraphᚋmodelᚐPlanningProjectᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.PlanningProject) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNPlanningProject2ᚖServerBTIᚋgraphᚋmodelᚐPlanningProject(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalNPlanningProject2ᚖServerBTIᚋgraphᚋmodelᚐPlanningProject(ctx context.Context, sel ast.SelectionSet, v *model.PlanningProject) graphql.Marshaler {
