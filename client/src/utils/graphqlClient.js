@@ -49,6 +49,7 @@ export async function graphqlRequest(query, variables = {}) {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+
     if (userIdHeader) {
       headers['X-User-Id'] = String(userIdHeader);
     }
