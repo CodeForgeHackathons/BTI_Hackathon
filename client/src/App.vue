@@ -20,12 +20,11 @@
         </h1>
         <p class="hero__subtitle">
           Загрузите техпаспорт или эскиз, мгновенно получите 2.5D план, вид от
-          первого лица, проверку СНиПов и AI-сценарии. Всё работает в одном окне,
+          первого лица, проверку СНиПов. Всё работает в одном окне,
           без сложных терминов и техподробностей.
         </p>
         <div class="hero__actions">
           <button class="btn btn--primary" @click="scrollToIntake">Загрузить план</button>
-          <button class="btn btn--ghost" @click="scrollToGallery">Посмотреть примеры</button>
         </div>
       </div>
       <div class="hero__visual">
@@ -117,7 +116,7 @@
               {{ type }}
             </option>
           </select>
-          <small>Нужно для рекомендаций и AI-вариантов.</small>
+          <small>Нужно для рекомендаций.</small>
         </label>
         <label>
           Высота потолков, м
@@ -177,7 +176,7 @@
               {{ profile }}
             </option>
           </select>
-          <small>Влияет на сценарии AI и расстановку мебели.</small>
+          <small>Влияет на расстановку мебели.</small>
         </label>
         <label>
           Основная цель
@@ -186,7 +185,7 @@
             type="text"
             placeholder="Добавить кабинет, больше света, сдача в аренду"
           />
-          <small>Мы используем это при генерации вариантов.</small>
+          <small>Мы используем это при подготовке вариантов.</small>
         </label>
         <label class="intake__wide">
           Желания по перепланировке
@@ -209,8 +208,8 @@
     <section class="flow">
       <h2>Как это работает</h2>
       <p class="flow__subtitle">
-        Пять шагов от загрузки техпаспорта до заявки в БТИ: распознаём, даём
-        конструктор, проверяем, предлагаем AI-варианты и подключаем экспертов.
+        Четыре шага от загрузки техпаспорта до заявки в БТИ: распознаём, даём
+        конструктор, проверяем и подключаем экспертов.
       </p>
       <div class="flow__steps">
         <article v-for="(step, index) in steps" :key="step.title" class="step">
@@ -280,7 +279,6 @@
               <li>Быстрый конструктор: снос/перенос стен, перегородки, базовая мебель</li>
               <li>Визуализация: точный план сверху и прогулка от первого лица</li>
               <li>Проверка норм: несущие стены, мокрые зоны, вентиляция, пожарные требования</li>
-              <li>AI‑сценарии: 3–5 вариантов зонирования под ваши цели и бюджет</li>
               <li>Экспорт и заявка: DWG/SVG/3D и передача данных в БТИ</li>
             </ul>
           </div>
@@ -292,7 +290,6 @@
               <li>Система распознаёт геометрию и заполняет данные автоматически</li>
               <li>Редактируете в конструкторе и смотрите результат в 2.5D/FPV</li>
               <li>Получаете моментальную проверку норм и понятный отчёт</li>
-              <li>Выбираете готовый AI‑вариант или создаёте свой</li>
               <li>Отправляете заявку и получаете сопровождение экспертов</li>
             </ul>
           </div>
@@ -384,78 +381,6 @@
       </div>
     </div>
 
-    <section class="gallery" id="gallery">
-      <div class="section-header">
-        <h2>Готовые варианты перепланировок</h2>
-        <p>Выберите по типу квартиры, целям и доступному бюджету.</p>
-      </div>
-      <div class="gallery__filters">
-        <button class="chip chip--active">Метраж 35–80 м²</button>
-        <button class="chip">Семья с детьми</button>
-        <button class="chip">Рабочий кабинет</button>
-        <button class="chip">Экономия бюджета</button>
-      </div>
-      <div class="gallery__grid">
-        <article
-          v-for="scenario in scenarios"
-          :key="scenario.title"
-          class="scenario-card"
-        >
-          <div class="scenario-card__visual"></div>
-          <h3>{{ scenario.title }}</h3>
-          <p>{{ scenario.description }}</p>
-          <span class="scenario-card__tag">{{ scenario.benefit }}</span>
-        </article>
-      </div>
-    </section>
-
-    <section class="ai">
-      <div class="section-header">
-        <h2>AI-варианты перепланировки</h2>
-        <p>
-          Генеративный модуль создаёт 3–5 сценариев на основе ваших целей и набора
-          ограничений. Каждый вариант проверяется нормами до того, как попадает в
-          конструктор.
-        </p>
-      </div>
-      <div class="ai__grid">
-        <article v-for="variant in aiVariants" :key="variant.title" class="ai-card">
-          <div class="ai-card__badge">{{ variant.focus }}</div>
-          <h3>{{ variant.title }}</h3>
-          <p>{{ variant.description }}</p>
-          <ul>
-            <li v-for="point in variant.points" :key="point">{{ point }}</li>
-          </ul>
-        </article>
-      </div>
-      <button class="btn btn--primary btn--small" @click="openAiRequestModal">Запросить варианты AI</button>
-    </section>
-
-    <div v-if="isAiRequestModalOpen" class="modal-backdrop" @click.self="closeAiRequestModal">
-      <div class="modal">
-        <div class="modal__header">
-          <h3>Запрос вариантов AI</h3>
-          <button type="button" class="modal__close" @click="closeAiRequestModal">×</button>
-        </div>
-        <div class="modal__body ai-request">
-          <form class="ai-request__form" @submit.prevent="submitAiRequest">
-            <label>
-              Цели человека
-              <textarea v-model="aiRequest.goals" rows="4" placeholder="Добавить кабинет, больше света, удобная детская"></textarea>
-            </label>
-            <label>
-              Набор ограничений
-              <textarea v-model="aiRequest.constraints" rows="4" placeholder="нельзя переносить кухню над жилой\nсохранить вентшахту"></textarea>
-            </label>
-            <div class="ai-request__actions">
-              <button type="submit" class="btn btn--primary btn--small">Отправить запрос</button>
-              <button type="button" class="btn btn--ghost btn--small" @click="closeAiRequestModal">Отмена</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
     <section class="demo">
       <div class="demo__media">
         <img :src="demoImageUrl" alt="Визуализация квартиры" class="demo__img" loading="lazy" />
@@ -479,7 +404,7 @@
           :key="testimonial.author"
           class="testimonial-card"
         >
-          <p class="testimonial-card__text">“{{ testimonial.quote }}”</p>
+          <p class="testimonial-card__text">"{{ testimonial.quote }}"</p>
           <p class="testimonial-card__author">
             {{ testimonial.author }} · {{ testimonial.type }}
           </p>
@@ -746,7 +671,6 @@ const scrollToSection = (id) => {
 };
 
 const scrollToIntake = () => scrollToSection('intake');
-const scrollToGallery = () => scrollToSection('gallery');
 const isFlowModalOpen = ref(false);
 const activeFlowStep = ref(null);
 const openFlowModal = (index) => {
@@ -770,42 +694,6 @@ const normsReportText = ref('');
 const closeNormsModal = () => {
   isNormsModalOpen.value = false;
   normsReportText.value = '';
-};
-const isAiRequestModalOpen = ref(false);
-const aiRequest = reactive({ goals: '', constraints: '' });
-const openAiRequestModal = () => {
-  aiRequest.goals = formData.goal || '';
-  aiRequest.constraints = formData.constraintsText || '';
-  isAiRequestModalOpen.value = true;
-};
-const closeAiRequestModal = () => {
-  isAiRequestModalOpen.value = false;
-};
-const downloadAiRequestJson = (goals, constraintsText) => {
-  const constraints = (constraintsText || '')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const payload = {
-    timestamp: new Date().toISOString(),
-    aiRequest: {
-      goals: goals || '',
-      constraints,
-    },
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `homeplanner3d-ai-request-${Date.now()}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-};
-const submitAiRequest = () => {
-  formData.goal = aiRequest.goals || formData.goal;
-  formData.constraintsText = aiRequest.constraints || formData.constraintsText;
-  isAiRequestModalOpen.value = false;
-  downloadAiRequestJson(aiRequest.goals, aiRequest.constraints);
 };
 
 const buildLocalNormsReport = (payload) => {
@@ -929,7 +817,7 @@ const buildBtiPrompt = (payload) => {
   }
   return prompt;
 };
- 
+
 // Ленивая загрузка распознавателя (чтобы не блокировать загрузку страницы)
 let planRecognizer = null;
 async function getPlanRecognizer() {
@@ -949,7 +837,7 @@ let mlModelsLoading = false;
 async function preloadMLModels() {
   if (mlModelsLoading) return;
   mlModelsLoading = true;
-  
+
   try {
     // Загружаем ML модели в фоне
     const mlLoader = await import('./utils/mlModelLoader.js');
@@ -1168,7 +1056,7 @@ const handleGenerate = () => {
       file: uploadedFileMeta.value
         ? {
             name: uploadedFileMeta.value.name,
-            size: uploadedFileMeta.value.sizeBytes || uploadedFileMeta.value.size, 
+            size: uploadedFileMeta.value.sizeBytes || uploadedFileMeta.value.size,
             type: uploadedFileMeta.value.type,
             content: uploadedFileContent.value,
           }
@@ -1444,15 +1332,15 @@ const recognizePlan = async (file) => {
     // Ленивая загрузка модуля распознавания
     const recognizerModule = await getPlanRecognizer();
     const recognizePlanImage = recognizerModule.recognizePlan;
-    
+
     // Используем реальное распознавание на клиенте
     const result = await recognizePlanImage(file);
-    
+
     // Если успешно, заполняем также адрес, если он был извлечён
     if (result.success && result.address) {
       formData.address = result.address;
     }
-    
+
     return result;
   } catch (error) {
     console.error('Ошибка распознавания:', error);
@@ -1495,7 +1383,7 @@ const handleFileChange = async (event) => {
     recognitionStatus.value = 'idle';
     return;
   }
-  
+
   uploadedFileMeta.value = {
     name: file.name,
     size: `${(file.size / 1024).toFixed(1)} КБ`, // Для отображения
@@ -1503,14 +1391,14 @@ const handleFileChange = async (event) => {
     type: file.type || file.name.split('.').pop(),
   };
   uploadedFileContent.value = await fileToBase64(file);
-  
+
   // Запускаем распознавание
   recognitionStatus.value = 'processing';
   manualEditMode.value = false;
-  
+
   try {
     const recognitionResult = await recognizePlan(file);
-    
+
     if (recognitionResult.success) {
       // Автоматически заполняем данные из распознанного плана
       formData.roomsText = recognitionResult.rooms || '';
@@ -1518,7 +1406,7 @@ const handleFileChange = async (event) => {
       if (recognitionResult.area) formData.area = recognitionResult.area;
       if (recognitionResult.ceilingHeight) formData.ceilingHeight = recognitionResult.ceilingHeight;
       if (recognitionResult.address) formData.address = recognitionResult.address;
-      
+
       // Автоматически определяем тип квартиры
       if (recognitionResult.apartmentType) {
         const typeIndex = layoutTypes.findIndex(t => t === recognitionResult.apartmentType);
@@ -1526,10 +1414,10 @@ const handleFileChange = async (event) => {
           formData.layoutType = layoutTypes[typeIndex];
         }
       }
-      
+
       recognitionStatus.value = 'success';
       recognitionStats.value = recognitionResult.stats || null;
-      
+
       // Показываем статистику распознавания в консоли
       if (recognitionResult.stats) {
         console.log('Статистика распознавания:', recognitionResult.stats);
@@ -1592,7 +1480,7 @@ const handleSubmit = async () => {
 
   try {
     const response = await sendToApi(payload);
-    
+
     if (response.unavailable) {
       submitStatus.value = 'API временно недоступно.';
       return;
@@ -1643,16 +1531,6 @@ const steps = [
       'Несущие стены и допустимые проёмы',
       'Мокрые зоны и вентиляция',
       'Пожарные требования и эвакуационные пути'
-    ],
-  },
-  {
-    title: 'AI генерирует варианты',
-    description:
-      'Получайте 3–5 сценариев зонирования с учётом целей, бюджета и ограничений.',
-    details: [
-      'Генерация вариантов на основе целей и ограничений',
-      'Предварительная проверка норм для каждого варианта',
-      'Быстрая отправка в конструктор для доработки'
     ],
   },
   {
@@ -1728,60 +1606,6 @@ const checks = [
       'Контролируем эвакуационные пути и соблюдение минимальных проходов.',
     status: 'info',
     statusLabel: 'Info',
-  },
-];
-
-const aiVariants = [
-  {
-    title: 'Светлая гостиная',
-    focus: 'Семья + свет',
-    description: 'Кухня-гостиная с панорамным освещением и нишей под хранение.',
-    points: ['Снос двух перегородок', 'Усиление проёма 1,2 м', 'AR-просмотр'],
-  },
-  {
-    title: 'Спокойная двушка',
-    focus: 'Пара + кабинет',
-    description: 'Отдельный кабинет и кладовая без переноса мокрых зон.',
-    points: ['Лёгкие перегородки', 'Мебель вдоль несущей', 'Вариант бюджета'],
-  },
-  {
-    title: 'Смарт-перепланировка',
-    focus: 'Инвестиция',
-    description: 'Разделение на две студии с общим техблоком.',
-    points: ['Контроль нагрузок', 'Звукоизоляция', 'Готовая подача в БТИ'],
-  },
-];
-
-const scenarios = [
-  {
-    title: 'Студия 38 м²',
-    description: 'Зонирование спальни и увеличение кладовой.',
-    benefit: '+1 приватная зона',
-  },
-  {
-    title: 'Семейная 70 м²',
-    description: 'Увеличенная кухня-гостиная и детская.',
-    benefit: '+15% света',
-  },
-  {
-    title: 'Панельная двушка',
-    description: 'Легальный проём и вынос кухни в нишу.',
-    benefit: '+1 спальня',
-  },
-  {
-    title: 'Лофт 55 м²',
-    description: 'Рабочее место и гардеробная в несущем каркасе.',
-    benefit: '+10 м² хранения',
-  },
-  {
-    title: 'Сити-апартаменты',
-    description: 'Умное освещение и кабинет у окна.',
-    benefit: 'AR тур',
-  },
-  {
-    title: 'Сканди навесной модуль',
-    description: 'Сборные перегородки и экосвет.',
-    benefit: '-20% бюджета',
   },
 ];
 
@@ -2499,33 +2323,6 @@ section {
   color: #c6cad4;
 }
 
-.ai-request__form {
-  display: grid;
-  gap: 12px;
-}
-
-.ai-request__form label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
-  color: #dfe2ea;
-}
-
-.ai-request__form textarea {
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: #fff;
-  padding: 10px;
-  font-family: inherit;
-}
-
-.ai-request__actions {
-  display: flex;
-  gap: 8px;
-}
-
 .recognition {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -2591,8 +2388,6 @@ section {
   .builder__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .builder__modes { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .checks__list { display: grid; grid-template-columns: 1fr; gap: 12px; }
-  .gallery__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-  .ai__grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .testimonials__list { display: grid; grid-template-columns: 1fr; gap: 12px; }
 
   .demo { display: grid; grid-template-columns: 1fr; gap: 16px; }
@@ -2674,103 +2469,6 @@ section {
 .status--info {
   background: rgba(126, 180, 255, 0.15);
   color: #cfe0ff;
-}
-
-.gallery__filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin: 24px 0;
-}
-
-.chip {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: transparent;
-  color: #dfe2ea;
-  border-radius: 999px;
-  padding: 8px 18px;
-  cursor: pointer;
-}
-
-.chip--active {
-  background: #2f5dff;
-  border-color: #2f5dff;
-}
-
-.gallery__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-}
-
-.scenario-card {
-  padding: 18px;
-  border-radius: 18px;
-  background: #11131c;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.scenario-card__visual {
-  height: 140px;
-  border-radius: 14px;
-  margin-bottom: 14px;
-  background: linear-gradient(135deg, rgba(47, 93, 255, 0.3), rgba(32, 201, 151, 0.2));
-}
-
-.scenario-card__tag {
-  display: inline-block;
-  margin-top: 8px;
-  font-size: 13px;
-  color: #9cb4ff;
-}
-
-.ai {
-  margin-top: 72px;
-}
-
-.ai__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 18px;
-  margin-bottom: 24px;
-}
-
-.ai-card {
-  padding: 20px;
-  border-radius: 18px;
-  background: #151826;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.ai-card__badge {
-  display: inline-flex;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 12px;
-  margin-bottom: 10px;
-}
-
-.ai-card ul {
-  padding-left: 18px;
-  margin: 12px 0 0;
-  color: #c6cad4;
-}
-
-.demo {
-  margin-top: 80px;
-  padding: 40px;
-  border-radius: 24px;
-  background: radial-gradient(circle at center, #1b2336, #0b0d12);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 32px;
-}
-
-.demo__media {
-  border-radius: 20px;
-  background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05) 10px, transparent 10px, transparent 20px);
-  min-height: 240px;
 }
 
 .testimonials__list {
@@ -2913,8 +2611,7 @@ section {
   transition: opacity 0.2s ease;
 }
 
-.btn:hover,
-.chip:hover {
+.btn:hover {
   opacity: 0.85;
 }
 
@@ -2995,8 +2692,6 @@ section {
   .builder__grid,
   .builder__modes,
   .checks__list,
-  .gallery__grid,
-  .ai__grid,
   .testimonials__list,
   .faq__list {
     grid-template-columns: 1fr;
